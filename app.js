@@ -314,34 +314,120 @@ function renderMatching(qObj) {
     leftTd.appendChild(labelSpan);
     leftTd.appendChild(contentSpan);
 
-    const select = document.createElement("select");
-    select.className = "matching-select";
-    select.dataset.leftKey = key;
+    const rightOptionStr = (rKey) => {
+      const raw = rightOptions[rKey];
+      return raw == null ? "" : String(raw);
+    };
+    const hasLatex = rightKeys.some((rKey) => rightOptionStr(rKey).indexOf("\\") !== -1);
 
-    const placeholder = document.createElement("option");
-    placeholder.value = "";
-    placeholder.textContent = "— оберіть літеру —";
-    select.appendChild(placeholder);
+    if (hasLatex) {
+      const wrap = document.createElement("div");
+      wrap.className = "matching-select-custom";
+      wrap.dataset.leftKey = key;
 
-    rightKeys.forEach((rKey) => {
-      const opt = document.createElement("option");
-      opt.value = rKey;
-      opt.textContent = `${rKey}) ${rightOptions[rKey]}`;
-      select.appendChild(opt);
-    });
+      const trigger = document.createElement("button");
+      trigger.type = "button";
+      trigger.className = "matching-select-trigger";
+      const triggerLabel = document.createElement("span");
+      triggerLabel.className = "matching-select-trigger-label";
+      const triggerMath = document.createElement("span");
+      triggerMath.className = "matching-select-trigger-math";
+      trigger.appendChild(triggerLabel);
+      trigger.appendChild(triggerMath);
 
-    if (qObj.userAnswer[key]) {
-      select.value = qObj.userAnswer[key];
+      const selectedKey = qObj.userAnswer[key];
+      if (selectedKey && rightOptions[selectedKey] != null) {
+        triggerLabel.textContent = selectedKey + ") ";
+        triggerMath.innerHTML = wrapLatex(rightOptionStr(selectedKey));
+      } else {
+        triggerLabel.textContent = "— оберіть літеру —";
+      }
+
+      const dropdown = document.createElement("div");
+      dropdown.className = "matching-select-dropdown";
+      dropdown.hidden = true;
+      rightKeys.forEach((rKey) => {
+        const opt = document.createElement("button");
+        opt.type = "button";
+        opt.className = "matching-select-option";
+        opt.dataset.value = rKey;
+        const optLabel = document.createElement("span");
+        optLabel.className = "matching-option-label";
+        optLabel.textContent = rKey + ") ";
+        const optMath = document.createElement("span");
+        optMath.className = "matching-option-math";
+        optMath.innerHTML = wrapLatex(rightOptionStr(rKey));
+        opt.appendChild(optLabel);
+        opt.appendChild(optMath);
+        dropdown.appendChild(opt);
+      });
+
+      wrap.appendChild(trigger);
+      wrap.appendChild(dropdown);
+
+      trigger.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (isFinished) return;
+        const open = wrap.classList.contains("matching-select-open");
+        document.querySelectorAll(".matching-select-custom.matching-select-open").forEach((w) => {
+          w.classList.remove("matching-select-open");
+          w.querySelector(".matching-select-dropdown").hidden = true;
+        });
+        if (!open) {
+          wrap.classList.add("matching-select-open");
+          dropdown.hidden = false;
+        }
+      });
+
+      dropdown.querySelectorAll(".matching-select-option").forEach((optBtn) => {
+        optBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const val = optBtn.dataset.value;
+          qObj.userAnswer[key] = val;
+          triggerLabel.textContent = val + ") ";
+          triggerMath.innerHTML = wrapLatex(rightOptionStr(val));
+          wrap.classList.remove("matching-select-open");
+          dropdown.hidden = true;
+          updateQuestionGridStyles();
+          if (window.MathJax && window.MathJax.typesetPromise) {
+            window.MathJax.typesetPromise([trigger]).catch(() => {});
+          }
+        });
+      });
+
+      document.addEventListener("click", function closeDropdown(ev) {
+        if (!wrap.contains(ev.target)) {
+          wrap.classList.remove("matching-select-open");
+          dropdown.hidden = true;
+        }
+      });
+
+      rightTd.appendChild(wrap);
+      if (window.MathJax && window.MathJax.typesetPromise) {
+        window.MathJax.typesetPromise([wrap]).catch(() => {});
+      }
+    } else {
+      const select = document.createElement("select");
+      select.className = "matching-select";
+      select.dataset.leftKey = key;
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = "— оберіть літеру —";
+      select.appendChild(placeholder);
+      rightKeys.forEach((rKey) => {
+        const opt = document.createElement("option");
+        opt.value = rKey;
+        opt.textContent = `${rKey}) ${rightOptions[rKey]}`;
+        select.appendChild(opt);
+      });
+      if (qObj.userAnswer[key]) select.value = qObj.userAnswer[key];
+      select.addEventListener("change", (e) => {
+        if (isFinished) return;
+        qObj.userAnswer[e.target.dataset.leftKey] = e.target.value;
+        updateQuestionGridStyles();
+      });
+      rightTd.appendChild(select);
     }
-
-    select.addEventListener("change", (e) => {
-      if (isFinished) return;
-      const k = e.target.dataset.leftKey;
-      qObj.userAnswer[k] = e.target.value;
-      updateQuestionGridStyles();
-    });
-
-    rightTd.appendChild(select);
     row.appendChild(leftTd);
     row.appendChild(rightTd);
     tbody.appendChild(row);

@@ -20,9 +20,9 @@ body {
 }
 
 .app-container {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 20px 24px 32px;
+  padding: 24px 32px 40px;
 }
 
 .hidden {
@@ -590,6 +590,99 @@ body {
   background: #fff;
 }
 
+/* Кастомний випадаючий список для LaTeX у відповідях */
+.matching-select-custom {
+  position: relative;
+  max-width: 320px;
+  margin-top: 6px;
+}
+
+.matching-select-trigger {
+  width: 100%;
+  text-align: left;
+  border-radius: 8px;
+  border: 1px solid #d0d5dc;
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.matching-select-trigger:hover {
+  border-color: #2563eb;
+  background: #f8fafc;
+}
+
+.matching-select-trigger-label {
+  flex-shrink: 0;
+}
+
+.matching-select-trigger-math {
+  display: inline;
+  font-size: 0.8em;
+  line-height: 1.35;
+  vertical-align: middle;
+}
+
+/* Зменшений масштаб формул MathJax у випадаючому списку */
+.matching-select-trigger-math .mjx-chtml,
+.matching-option-math .mjx-chtml {
+  font-size: 1em;
+}
+
+.matching-select-dropdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  margin-top: 4px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 10;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.matching-select-option {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f2f5;
+}
+
+.matching-select-option:last-child {
+  border-bottom: none;
+}
+
+.matching-select-option:hover {
+  background: #e8eef7;
+}
+
+.matching-option-label {
+  flex-shrink: 0;
+}
+
+.matching-option-math {
+  display: inline;
+  font-size: 0.8em;
+  line-height: 1.35;
+  vertical-align: middle;
+}
+
 /* ----- Коротка відповідь ----- */
 .short-answer-wrapper {
   margin-top: 12px;
@@ -618,7 +711,7 @@ body {
 /* ----- Результати ----- */
 .result-card {
   margin-top: 0;
-  max-width: 720px;
+  width: 100%;
 }
 
 .result-card h2 {
@@ -672,16 +765,17 @@ body {
 
 /* ----- Футер ----- */
 .page-footer {
-  margin-top: 20px;
-  padding-top: 12px;
+  margin-top: 16px;
+  padding-top: 8px;
   border-top: 1px solid #e8eaed;
   text-align: center;
-  font-size: 0.8rem;
-  color: #5f6b7a;
+  font-size: 0.75rem;
+  color: #6b778d;
 }
 
 .page-footer p {
-  margin: 0 0 2px 0;
+  margin: 0;
+  line-height: 1.4;
 }
 
 .page-footer a {
