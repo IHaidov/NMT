@@ -1,0 +1,8 @@
+{
+  "name": "nmt-math-trainer",
+  "version": "1.0.0",
+  "description": "Тренувальний варіант НМТ з математики",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

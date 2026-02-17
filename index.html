@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Підготовчі завдання НМТ з математики</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <!-- MathJax for LaTeX rendering -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\(', '\\)'], ['$', '$']],
+        displayMath: [['\\[', '\\]'], ['$$', '$$']]
+      },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="header-left">
+        <div class="header-text">
+          <h1>Підготовчі завдання з Математики для Національного Мульти Тесту в Україні</h1>
+          <p class="header-subtitle">Тренувальний онлайн-тренажер</p>
+        </div>
+      </div>
+      <div class="header-right">
+      </div>
+    </header>
+
+    <main>
+      <!-- Стартовий екран -->
+      <section id="start-screen" class="card start-screen">
+        <h2>Почніть тренувальний варіант НМТ</h2>
+        <p class="muted">
+          Уведіть ваше <strong>прізвище, ім’я та по батькові</strong>, щоб розпочати тестування.
+        </p>
+        <label class="field-label" for="student-name">ПІБ учня</label>
+        <input id="student-name" type="text" class="text-input" placeholder="Наприклад: Іваненко Марія Петрівна" />
+        <p id="name-error" class="input-error" aria-live="polite"></p>
+        <div class="start-actions">
+          <button id="start-btn" class="btn btn-primary">Почати тест</button>
+        </div>
+        <p class="test-meta">
+          22 завдання &bull; до 90 хвилин &bull; максимальний бал: 32
+        </p>
+      </section>
+
+      <!-- Основний екран тесту -->
+      <section id="test-screen" class="test-layout hidden" aria-live="polite">
+        <aside class="sidebar" aria-label="Навігація по завданнях">
+          <div class="student-info">
+            <div class="student-name-label">Учень:</div>
+            <div id="student-name-display" class="student-name-value"></div>
+          </div>
+          <div class="legend">
+            <div><span class="legend-dot unanswered"></span> не переглянуто / без відповіді</div>
+            <div><span class="legend-dot answered"></span> є відповідь</div>
+            <div><span class="legend-dot flagged"></span> позначено для повторного перегляду</div>
+          </div>
+          <div class="question-grid" id="question-grid" aria-label="Список завдань"></div>
+          <button id="finish-btn" class="btn btn-danger finish-btn">Завершити тестування</button>
+          <p class="finish-note muted">
+            Після завершення тесту змінювати відповіді буде неможливо.
+          </p>
+        </aside>
+
+        <section class="question-area">
+          <div id="timer" class="timer" aria-live="polite"></div>
+          <div id="question-card" class="card question-card">
+            <div class="question-header">
+              <div>
+                <div id="question-index" class="question-index"></div>
+                <div id="question-topic" class="question-topic"></div>
+              </div>
+              <button id="flag-btn" class="flag-btn" type="button">
+                <span class="flag-icon" aria-hidden="true">★</span>
+                <span class="flag-text">Позначити питання</span>
+              </button>
+            </div>
+
+            <div id="question-content" class="question-content"></div>
+            <div id="question-image" class="question-image-container"></div>
+            <div id="question-body" class="question-body"></div>
+
+            <div class="question-footer">
+              <button id="prev-btn" class="btn btn-secondary" type="button">Попереднє</button>
+              <button id="next-btn" class="btn btn-secondary" type="button">Наступне</button>
+            </div>
+          </div>
+
+          <section id="result-panel" class="card result-card hidden">
+            <h2>Результат тестування</h2>
+            <p class="score-line">
+              Ваш результат: <strong id="score-points"></strong> з 32 можливих
+              (<strong id="score-percent"></strong>%)
+            </p>
+            <p id="score-comment" class="muted"></p>
+
+            <details class="details-incorrect">
+              <summary>Показати завдання, у яких допущено помилки</summary>
+              <div id="incorrect-list" class="incorrect-list"></div>
+            </details>
+          </section>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
+
