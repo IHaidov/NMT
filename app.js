@@ -5,6 +5,8 @@ const MATCHING_COUNT = 3;
 const SHORT_COUNT = 4;
 const MAX_SCORE = 32;
 const TEST_DURATION_MINUTES = 90;
+const STORAGE_KEY = "nmt-test-state";
+const RESULT_STORAGE_KEY = "nmt-test-result";
 
 let allQuestions = [];
 let testQuestions = [];
@@ -33,12 +35,6 @@ const nextBtn = document.getElementById("next-btn");
 const flagBtn = document.getElementById("flag-btn");
 const finishBtn = document.getElementById("finish-btn");
 
-const resultPanel = document.getElementById("result-panel");
-const scorePointsEl = document.getElementById("score-points");
-const scorePercentEl = document.getElementById("score-percent");
-const scoreCommentEl = document.getElementById("score-comment");
-const incorrectListEl = document.getElementById("incorrect-list");
-
 // Допоміжні функції
 function shuffle(array) {
   const arr = array.slice();
@@ -63,6 +59,36 @@ function classifyQuestion(q) {
   }
   // За замовчуванням — тест з однією правильною відповіддю
   return "single";
+}
+
+function saveTestState() {
+  if (isFinished || !testQuestions.length) return;
+  try {
+    const state = {
+      studentName: studentNameDisplay.textContent || "",
+      testQuestions,
+      currentIndex,
+      endTime,
+      isFinished,
+    };
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {
+    console.warn("Не вдалося зберегти стан тесту", e);
+  }
+}
+
+function loadTestState() {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
+
+function clearTestState() {
+  sessionStorage.removeItem(STORAGE_KEY);
 }
 
 function prepareTestQuestions() {
@@ -97,9 +123,11 @@ function prepareTestQuestions() {
   }));
 }
 
-function startTimer() {
-  const durationMs = TEST_DURATION_MINUTES * 60 * 1000;
-  endTime = Date.now() + durationMs;
+function startTimer(useExistingEndTime = false) {
+  if (!useExistingEndTime) {
+    const durationMs = TEST_DURATION_MINUTES * 60 * 1000;
+    endTime = Date.now() + durationMs;
+  }
 
   function updateTimer() {
     const remaining = endTime - Date.now();
@@ -164,6 +192,13 @@ function wrapLatex(latex) {
   return `\\(${latex}\\)`;
 }
 
+function escapeHtml(str) {
+  if (!str) return "";
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 function renderSingleChoice(qObj) {
   const q = qObj.raw;
   const container = document.createElement("ul");
@@ -191,18 +226,15 @@ function renderSingleChoice(qObj) {
     const content = document.createElement("div");
     content.className = "option-content";
 
-    const mainText = document.createElement("p");
-    mainText.className = "option-main-text";
-    mainText.textContent = opt.text || "";
-
-    content.appendChild(mainText);
-
+    // У відповідях показуємо лише LaTeX (якщо є), інакше текст
+    const optionDisplay = document.createElement("div");
+    optionDisplay.className = "option-main-text";
     if (opt.latex) {
-      const latexEl = document.createElement("div");
-      latexEl.className = "option-latex";
-      latexEl.innerHTML = wrapLatex(opt.latex);
-      content.appendChild(latexEl);
+      optionDisplay.innerHTML = wrapLatex(opt.latex);
+    } else {
+      optionDisplay.textContent = opt.text || "";
     }
+    content.appendChild(optionDisplay);
 
     li.appendChild(badge);
     li.appendChild(content);
@@ -271,11 +303,16 @@ function renderMatching(qObj) {
     labelSpan.className = "matching-label";
     labelSpan.textContent = key + ")";
 
-    const textSpan = document.createElement("span");
-    textSpan.textContent = " " + leftItems[key];
+    const contentSpan = document.createElement("span");
+    const val = leftItems[key];
+    if (typeof val === "string" && val.indexOf("\\") !== -1) {
+      contentSpan.innerHTML = " " + wrapLatex(val);
+    } else {
+      contentSpan.textContent = " " + (val || "");
+    }
 
     leftTd.appendChild(labelSpan);
-    leftTd.appendChild(textSpan);
+    leftTd.appendChild(contentSpan);
 
     const select = document.createElement("select");
     select.className = "matching-select";
@@ -349,21 +386,15 @@ function renderQuestion(index) {
   questionIndexEl.textContent = `Завдання ${index + 1} з ${testQuestions.length}`;
   questionTopicEl.textContent = q.topic || "";
   
-  // Об'єднуємо текст питання та LaTeX в один елемент
+  // Питання: HTML з екрануванням, щоб inline LaTeX \(...\) міг бути відрендерений MathJax при кожному переході
   questionContentEl.innerHTML = "";
   if (q.question) {
     const questionText = document.createElement("div");
     questionText.className = "question-text";
-    questionText.textContent = q.question;
+    questionText.innerHTML = escapeHtml(q.question);
     questionContentEl.appendChild(questionText);
   }
-  if (q.latex) {
-    const latexDiv = document.createElement("div");
-    latexDiv.className = "question-latex";
-    latexDiv.innerHTML = wrapLatex(q.latex);
-    questionContentEl.appendChild(latexDiv);
-  }
-  
+
   questionBodyEl.innerHTML = "";
 
   // Зображення, якщо є
@@ -398,10 +429,12 @@ function renderQuestion(index) {
 
   updateQuestionGridStyles();
 
-  // Обробка MathJax для формул
+  // MathJax для питання та варіантів відповідей, щоб формули рендерились при кожному переході
   if (window.MathJax && window.MathJax.typesetPromise) {
-    window.MathJax.typesetPromise([questionContentEl, questionCard]).catch(() => {});
+    window.MathJax.typesetPromise([questionContentEl, questionBodyEl]).catch(() => {});
   }
+
+  if (!isFinished) saveTestState();
 }
 
 function goToQuestion(index) {
@@ -491,102 +524,70 @@ function evaluateTest() {
   return { score, percent, incorrect };
 }
 
-function renderResults({ score, percent, incorrect }) {
-  scorePointsEl.textContent = score.toString();
-  scorePercentEl.textContent = percent.toString();
+function getComment(percent) {
+  if (percent >= 90) return "Відмінний результат! Ви чудово підготовлені до НМТ.";
+  if (percent >= 70) return "Гарний результат. Зверніть увагу на завдання з помилками, щоб закріпити матеріал.";
+  return "Є над чим попрацювати. Проаналізуйте завдання з помилками та повторіть відповідні теми.";
+}
 
-  if (percent >= 90) {
-    scoreCommentEl.textContent = "Відмінний результат! Ви чудово підготовлені до НМТ.";
-  } else if (percent >= 70) {
-    scoreCommentEl.textContent =
-      "Гарний результат. Зверніть увагу на завдання з помилками, щоб закріпити матеріал.";
-  } else {
-    scoreCommentEl.textContent =
-      "Є над чим попрацювати. Проаналізуйте завдання з помилками та повторіть відповідні теми.";
-  }
-
-  incorrectListEl.innerHTML = "";
-
-  incorrect.forEach((item) => {
+function buildResultPayload(result, studentName) {
+  const incorrectSerialized = result.incorrect.map((item) => {
     const { index, question, type, userAnswer } = item;
-    const block = document.createElement("div");
-    block.className = "incorrect-item";
-
-    const title = document.createElement("div");
-    title.className = "incorrect-title";
-    title.textContent = `Завдання ${index + 1}`;
-
-    const qText = document.createElement("div");
-    qText.className = "incorrect-question";
-    qText.textContent = question.question || "";
-
-    block.appendChild(title);
-    block.appendChild(qText);
-
-    const your = document.createElement("p");
-    your.className = "incorrect-answer-line";
-
+    let correctText = "";
+    let correctLatex = "";
     if (type === "single") {
-      const correctLabels = (question.answer || []).map((a) => a.label);
       const correctTexts = (question.answer || []).map((a) => `${a.label}) ${a.text || ""}`);
-      const chosenOption =
-        (question.options || []).find((o) => o.label === userAnswer) || null;
-      const yourText = chosenOption ? `${chosenOption.label}) ${chosenOption.text || ""}` : "—";
-
-      your.innerHTML = `<strong>Ваша відповідь:</strong> ${yourText}`;
-
-      const correct = document.createElement("p");
-      correct.className = "incorrect-answer-line";
-      correct.innerHTML = `<strong>Правильна відповідь:</strong> ${correctTexts.join(", ")}`;
-      block.appendChild(your);
-      block.appendChild(correct);
+      correctText = correctTexts.join(", ");
+      const ans = (question.answer || [])[0];
+      if (ans && ans.latex != null) correctLatex = ans.latex;
     } else if (type === "matching") {
-      your.innerHTML = "<strong>Ваша відповідь:</strong>";
-      block.appendChild(your);
-
-      const ua = userAnswer || {};
-      const correctLines = [];
-      const yourLines = [];
-
-      (question.answer || []).forEach((pair) => {
+      const lines = (question.answer || []).map((pair) => {
         const key = pair.statement || pair.expression || pair.segment || pair.label;
-        if (!key) return;
-        const expected = pair.label;
-        const actual = ua[key] || "—";
-        yourLines.push(`${key} → ${actual}`);
-        correctLines.push(`${key} → ${expected}`);
+        return key ? `${key} → ${pair.label}` : "";
       });
-
-      const yourDetails = document.createElement("p");
-      yourDetails.className = "incorrect-answer-line";
-      yourDetails.textContent = yourLines.join("; ");
-
-      const correct = document.createElement("p");
-      correct.className = "incorrect-answer-line";
-      correct.innerHTML = `<strong>Правильні відповідності:</strong> ${correctLines.join("; ")}`;
-
-      block.appendChild(yourDetails);
-      block.appendChild(correct);
+      correctText = lines.filter(Boolean).join("; ");
     } else if (type === "short") {
-      your.innerHTML = `<strong>Ваша відповідь:</strong> ${
-        userAnswer && userAnswer !== "" ? userAnswer : "—"
-      }`;
-      const correct = document.createElement("p");
-      correct.className = "incorrect-answer-line";
-      const correctStr = typeof question.answer === "string" ? question.answer : String(question.answer);
-      correct.innerHTML = `<strong>Правильна відповідь:</strong> ${correctStr}`;
-      block.appendChild(your);
-      block.appendChild(correct);
+      correctText = typeof question.answer === "string" ? question.answer : String(question.answer);
     }
-
-    incorrectListEl.appendChild(block);
+    let yourText = "—";
+    let yourLatex = "";
+    if (type === "single") {
+      const chosen = (question.options || []).find((o) => o.label === userAnswer);
+      yourText = chosen ? `${chosen.label}) ${chosen.text || ""}` : "—";
+      if (chosen && chosen.latex != null) yourLatex = chosen.latex;
+    } else if (type === "matching" && userAnswer && typeof userAnswer === "object") {
+      yourText = Object.entries(userAnswer).map(([k, v]) => `${k} → ${v}`).join("; ");
+    } else if (type === "short") {
+      yourText = userAnswer && userAnswer !== "" ? userAnswer : "—";
+    }
+    return {
+      index: index + 1,
+      questionText: question.question || "",
+      type,
+      yourText,
+      correctText,
+      yourLatex: yourLatex || undefined,
+      correctLatex: correctLatex || undefined,
+    };
   });
+  return {
+    studentName: studentName || "",
+    score: result.score,
+    percent: result.percent,
+    comment: getComment(result.percent),
+    incorrect: incorrectSerialized,
+  };
+}
 
-  resultPanel.classList.remove("hidden");
-
-  if (window.MathJax && window.MathJax.typesetPromise) {
-    window.MathJax.typesetPromise([resultPanel]).catch(() => {});
+function saveResultAndRedirect(result) {
+  const studentName = studentNameDisplay.textContent || "";
+  const payload = buildResultPayload(result, studentName);
+  try {
+    sessionStorage.setItem(RESULT_STORAGE_KEY, JSON.stringify(payload));
+  } catch (e) {
+    console.warn("Не вдалося зберегти результат", e);
   }
+  window.location.href = "results.html";
 }
 
 function finishTest(auto = false) {
@@ -600,6 +601,7 @@ function finishTest(auto = false) {
 
   isFinished = true;
   clearInterval(timerInterval);
+  clearTestState();
 
   // Блокуємо навігацію
   prevBtn.disabled = true;
@@ -609,7 +611,7 @@ function finishTest(auto = false) {
   questionGrid.querySelectorAll("button").forEach((btn) => (btn.disabled = true));
 
   const result = evaluateTest();
-  renderResults(result);
+  saveResultAndRedirect(result);
 }
 
 // Обробники подій
@@ -661,4 +663,25 @@ nextBtn.addEventListener("click", () => {
 
 flagBtn.addEventListener("click", toggleFlag);
 finishBtn.addEventListener("click", () => finishTest(false));
+
+// Відновлення тесту після оновлення сторінки
+(function tryRestoreTest() {
+  const state = loadTestState();
+  if (!state || state.isFinished || !Array.isArray(state.testQuestions) || state.testQuestions.length === 0) {
+    return;
+  }
+
+  testQuestions = state.testQuestions;
+  currentIndex = state.currentIndex;
+  endTime = state.endTime;
+  isFinished = state.isFinished;
+
+  studentNameDisplay.textContent = state.studentName || "";
+  startScreen.classList.add("hidden");
+  testScreen.classList.remove("hidden");
+
+  renderQuestionGrid();
+  renderQuestion(currentIndex);
+  startTimer(true);
+})();
 

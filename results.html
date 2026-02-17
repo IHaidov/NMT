@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Результати тестування — НМТ з математики</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\(', '\\)'], ['$', '$']],
+        displayMath: [['\\[', '\\]'], ['$$', '$$']]
+      },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="header-left">
+        <div class="herb-wrap">
+          <svg class="herb-img" viewBox="0 0 64 64" width="56" height="56" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Герб України">
+            <path fill="#0057B7" d="M32 4c7 6 12 14 12 24v24l-4-2V28l-5 10h-6L24 28v22l-4 2V28C20 18 25 10 32 4z"/>
+            <path fill="#0057B7" d="M18 18c-2 4-3 8-3 12v22l-5-3V32c0-6 3-10 8-14zM46 18c5 4 8 8 8 14v17l-5 3V30c0-4-1-8-3-12z"/>
+          </svg>
+        </div>
+        <div class="header-text">
+          <h1>Результати тестування</h1>
+          <p class="header-subtitle">Підготовчі завдання з Математики для національного мультипредметного тесту</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <a href="./index.html" class="info-link">
+          <span class="info-icon">←</span>
+          <span class="info-text">На головну</span>
+        </a>
+      </div>
+    </header>
+
+    <main>
+      <section id="result-content" class="card result-card">
+        <p id="no-data-msg" class="muted hidden">Немає збережених результатів. Пройдіть тест на <a href="./index.html">головній сторінці</a>.</p>
+        <div id="result-body" class="hidden">
+          <div class="result-score-block">
+            <p id="result-student" class="result-student-name"></p>
+            <h2>Результат тестування</h2>
+            <p class="score-line">
+              Ваш результат: <strong id="score-points"></strong> з 32 можливих
+              (<strong id="score-percent"></strong>%)
+            </p>
+            <p id="score-comment" class="muted result-comment"></p>
+          </div>
+          <details class="details-incorrect">
+            <summary>Показати завдання, у яких допущено помилки</summary>
+            <div id="incorrect-list" class="incorrect-list"></div>
+          </details>
+        </div>
+      </section>
+    </main>
+
+    <footer class="page-footer">
+      <p class="footer-author">Підготувала — Гайдова Віра Вікторівна</p>
+      <p>2025 · <a href="https://github.com" id="repo-link" target="_blank" rel="noopener">Репозиторій проєкту</a></p>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      function escapeHtml(str) {
+        if (str == null) return "";
+        var div = document.createElement("div");
+        div.textContent = str;
+        return div.innerHTML;
+      }
+
+      const RESULT_KEY = "nmt-test-result";
+      const raw = sessionStorage.getItem(RESULT_KEY);
+      const noDataMsg = document.getElementById("no-data-msg");
+      const resultBody = document.getElementById("result-body");
+
+      if (!raw) {
+        noDataMsg.classList.remove("hidden");
+        return;
+      }
+
+      var data;
+      try {
+        data = JSON.parse(raw);
+      } catch (e) {
+        noDataMsg.classList.remove("hidden");
+        return;
+      }
+
+      noDataMsg.classList.add("hidden");
+      resultBody.classList.remove("hidden");
+
+      if (data.studentName) {
+        document.getElementById("result-student").textContent = "Учень: " + data.studentName;
+      }
+      document.getElementById("score-points").textContent = String(data.score);
+      document.getElementById("score-percent").textContent = String(data.percent);
+      document.getElementById("score-comment").textContent = data.comment || "";
+
+      function answerHtml(label, text, latex) {
+        var content = (latex ? "\\(" + latex + "\\)" : escapeHtml(text || "—"));
+        return "<strong>" + escapeHtml(label) + "</strong> " + content;
+      }
+      var listEl = document.getElementById("incorrect-list");
+      (data.incorrect || []).forEach(function (item) {
+        var block = document.createElement("div");
+        block.className = "incorrect-item";
+        var q = item.questionText || "";
+        block.innerHTML =
+          "<div class=\"incorrect-title\">Завдання " + escapeHtml(String(item.index)) + "</div>" +
+          "<div class=\"incorrect-question math-content\">" + escapeHtml(q) + "</div>" +
+          "<p class=\"incorrect-answer-line math-content\">" + answerHtml("Ваша відповідь:", item.yourText, item.yourLatex) + "</p>" +
+          "<p class=\"incorrect-answer-line math-content\">" + answerHtml("Правильна відповідь:", item.correctText, item.correctLatex) + "</p>";
+        listEl.appendChild(block);
+      });
+
+      if (window.MathJax && window.MathJax.typesetPromise) {
+        window.MathJax.typesetPromise([resultBody]).then(function () {}).catch(function (err) { console.warn(err); });
+      }
+    })();
+  </script>
+</body>
+</html>

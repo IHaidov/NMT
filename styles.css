@@ -617,23 +617,80 @@ body {
 
 /* ----- Результати ----- */
 .result-card {
-  margin-top: 8px;
+  margin-top: 0;
+  max-width: 720px;
 }
 
 .result-card h2 {
   margin-top: 0;
+  margin-bottom: 16px;
+  font-size: 1.25rem;
+  color: #1a1f2e;
+}
+
+.result-score-block {
+  background: #f0f4f8;
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-bottom: 20px;
+  border: 1px solid #e2e8f0;
+}
+
+.result-student-name {
+  font-size: 0.95rem;
+  color: #5f6b7a;
   margin-bottom: 12px;
-  font-size: 1.2rem;
 }
 
 .score-line {
-  font-size: 1.05rem;
-  margin-bottom: 10px;
-  color: #2c3e50;
+  font-size: 1.15rem;
+  margin-bottom: 8px;
+  color: #1a1f2e;
+}
+
+.score-line strong {
+  color: #2563eb;
+}
+
+#score-comment.result-comment {
+  margin-top: 12px;
+  margin-bottom: 0;
+  font-size: 0.98rem;
 }
 
 .details-incorrect {
-  margin-top: 16px;
+  margin-top: 20px;
+  border-top: 1px solid #e8eaed;
+  padding-top: 16px;
+}
+
+.details-incorrect summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: #3d4f5f;
+}
+
+/* ----- Футер ----- */
+.page-footer {
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid #e8eaed;
+  text-align: center;
+  font-size: 0.8rem;
+  color: #5f6b7a;
+}
+
+.page-footer p {
+  margin: 0 0 2px 0;
+}
+
+.page-footer a {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.page-footer a:hover {
+  text-decoration: underline;
 }
 
 .incorrect-list {
