@@ -298,14 +298,39 @@ function renderSingleChoice(qObj) {
 }
 
 function getMatchingLeftItems(q) {
-  if (q.statements) return q.statements;
-  if (q.expressions) return q.expressions;
-  if (q.segments) return q.segments;
+  // Масиви об'єктів { label, text } — нормалізуємо до { label: text }, щоб не показувати [object Object]
+  const toLeft = (arr) => {
+    if (!Array.isArray(arr) || !arr.length) return null;
+    const first = arr[0];
+    if (first && typeof first === "object" && (first.text != null || first.latex != null)) {
+      const left = {};
+      arr.forEach((o) => {
+        left[o.label] = o.text != null ? o.text : (o.latex != null ? o.latex : "");
+      });
+      return left;
+    }
+    return null;
+  };
+  if (q.statements) {
+    const normalized = toLeft(q.statements);
+    if (normalized) return normalized;
+    return q.statements;
+  }
+  if (q.expressions) {
+    const normalized = toLeft(q.expressions);
+    if (normalized) return normalized;
+    return q.expressions;
+  }
+  if (q.segments) {
+    const normalized = toLeft(q.segments);
+    if (normalized) return normalized;
+    return q.segments;
+  }
   // Структура з options як лівою частиною
   if (Array.isArray(q.options) && q.options[0] && q.options[0].matches) {
     const left = {};
     q.options.forEach((o) => {
-      left[o.label] = o.text;
+      left[o.label] = o.text != null ? o.text : (o.latex != null ? o.latex : "");
     });
     return left;
   }
@@ -357,11 +382,16 @@ function renderMatching(qObj) {
     labelSpan.textContent = key + ")";
 
     const contentSpan = document.createElement("span");
-    const val = leftItems[key];
-    if (typeof val === "string" && val.indexOf("\\") !== -1) {
-      contentSpan.innerHTML = " " + wrapLatex(val);
+    let val = leftItems[key];
+    if (val != null && typeof val === "object") {
+      val = val.text != null ? val.text : (val.latex != null ? val.latex : "");
+    }
+    const str = val != null ? String(val) : "";
+    const looksLikeLatex = typeof str === "string" && (str.indexOf("\\") !== -1 || str.indexOf("^{") !== -1 || str.indexOf("_{") !== -1);
+    if (looksLikeLatex) {
+      contentSpan.innerHTML = " " + wrapLatex(str);
     } else {
-      contentSpan.textContent = " " + (val || "");
+      contentSpan.textContent = " " + str;
     }
 
     leftTd.appendChild(labelSpan);
