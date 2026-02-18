@@ -22,11 +22,9 @@
     .teacher-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
     .teacher-user { font-size: 0.9rem; color: #5f6b7a; }
     .logout-btn { font-size: 0.9rem; }
-    .otp-box { background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
-    .otp-box h3 { margin: 0 0 8px 0; font-size: 1rem; }
-    .otp-code { font-size: 1.5rem; font-weight: 700; letter-spacing: 0.2em; font-family: monospace; color: #0369a1; }
-    .otp-expiry { font-size: 0.85rem; color: #5f6b7a; margin-top: 8px; }
-    .otp-box .btn { margin-top: 12px; }
+    .class-otp { font-size: 0.9rem; margin-top: 6px; }
+    .class-otp code { font-weight: 700; letter-spacing: 0.15em; color: #0369a1; background: #f0f9ff; padding: 2px 8px; border-radius: 4px; }
+    .class-otp .otp-expiry { font-size: 0.8rem; color: #5f6b7a; margin-top: 2px; }
   </style>
 </head>
 <body>
@@ -75,13 +73,7 @@
             <button type="button" id="btn-logout" class="btn btn-secondary logout-btn">Вийти</button>
           </div>
         </div>
-        <div id="otp-box" class="otp-box">
-          <h3>Код доступу для учнів (OTP)</h3>
-          <p class="muted" style="margin:0 0 8px 0;">Учні вводять цей код на головній сторінці тесту, щоб отримати доступ.</p>
-          <div id="otp-code-display" class="otp-code">—</div>
-          <div id="otp-expiry-display" class="otp-expiry"></div>
-          <button type="button" id="btn-regenerate-otp" class="btn btn-secondary">Перегенерувати код</button>
-        </div>
+        <p class="muted" style="margin:0 0 16px 0;">У кожного класу свій код доступу (OTP). Учні вводять код класу на головній сторінці тесту — після введення пошти вони автоматично приписуються до цього класу.</p>
         <button type="button" id="btn-create-class" class="btn btn-primary btn-create">Створити клас</button>
         <ul class="class-list" id="class-list"></ul>
       </section>
@@ -142,47 +134,23 @@
         fetch("/api/teachers/logout", { method: "POST", credentials: "include" }).then(function () { showAuth(); });
       });
 
-      function loadOtp() {
-        api("/api/teachers/otp").then(function (data) {
-          var codeEl = document.getElementById("otp-code-display");
-          var expiryEl = document.getElementById("otp-expiry-display");
-          if (codeEl) codeEl.textContent = data.code || "—";
-          if (expiryEl) {
-            var exp = data.expires_at ? new Date(data.expires_at) : null;
-            if (exp) {
-              var now = new Date();
-              if (exp <= now) expiryEl.textContent = "Код прострочено. Натисніть «Перегенерувати».";
-              else expiryEl.textContent = "Дійсний до: " + exp.toLocaleString("uk-UA");
-            } else expiryEl.textContent = "";
-          }
-        }).catch(function () {
-          var codeEl = document.getElementById("otp-code-display");
-          if (codeEl) codeEl.textContent = "—";
-        });
-      }
       function loadDashboard() {
         api("/api/teachers/me").then(function (data) {
           if (data.teacher && data.teacher.isAdmin) { window.location.href = "admin.html"; return Promise.reject(); }
           teacherNameEl.textContent = data.teacher.name + " (" + data.teacher.email + ")";
-          loadOtp();
           return api("/api/classes");
         }).then(function (data) {
           classList.innerHTML = "";
           data.classes.forEach(function (c) {
             var li = document.createElement("li");
-            li.innerHTML = '<a href="./class.html?id=' + c.id + '">' + escapeHtml(c.name) + '</a><div class="meta">Створено: ' + (c.created_at || "").slice(0, 10) + '</div>';
+            var exp = c.otp_expires_at ? new Date(c.otp_expires_at) : null;
+            var expiryText = exp ? (exp > new Date() ? "Дійсний до: " + exp.toLocaleString("uk-UA") : "Прострочено") : "";
+            li.innerHTML = '<a href="./class.html?id=' + c.id + '">' + escapeHtml(c.name) + '</a><div class="meta">Створено: ' + (c.created_at || "").slice(0, 10) + '</div><div class="class-otp"><span>Код для учнів: </span><code>' + escapeHtml(c.otp_code || "—") + '</code><div class="otp-expiry">' + expiryText + '</div></div>';
             classList.appendChild(li);
           });
           showDashboard();
         }).catch(function () {});
       }
-      document.getElementById("btn-regenerate-otp").addEventListener("click", function () {
-        var btn = this;
-        btn.disabled = true;
-        api("/api/teachers/otp/regenerate", { method: "POST" }).then(function (data) {
-          loadOtp();
-        }).catch(function (e) { alert(e.message); }).finally(function () { btn.disabled = false; });
-      });
 
       document.getElementById("btn-create-class").addEventListener("click", function () {
         var name = prompt("Назва класу:");

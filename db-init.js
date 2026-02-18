@@ -69,4 +69,17 @@ db.exec(`
   }
 });
 
+// Migration: OTP код для кожного класу (учні вводять код класу і приписуються до нього)
+[
+  "otp_code TEXT",
+  "otp_expires_at TEXT",
+].forEach((colDef) => {
+  const colName = colDef.split(" ")[0];
+  try {
+    db.exec(`ALTER TABLE classes ADD COLUMN ${colName} ${colDef.substring(colName.length + 1)}`);
+  } catch (e) {
+    if (e.code !== "SQLITE_ERROR" || !/duplicate column name/i.test(e.message)) throw e;
+  }
+});
+
 module.exports = db;

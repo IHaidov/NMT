@@ -16,11 +16,11 @@ let timerInterval = null;
 let endTime = null;
 
 // Елементи DOM
-const otpScreen = document.getElementById("otp-screen");
 const startScreen = document.getElementById("start-screen");
 const testScreen = document.getElementById("test-screen");
 const otpCodeInput = document.getElementById("otp-code");
 const otpErrorEl = document.getElementById("otp-error");
+const otpSuccessEl = document.getElementById("otp-success");
 const otpSubmitBtn = document.getElementById("otp-submit-btn");
 const nameInput = document.getElementById("student-name");
 const emailInput = document.getElementById("student-email");
@@ -870,6 +870,27 @@ startBtn.addEventListener("click", async () => {
   window.studentEmail = email;
 
   try {
+    const joinRes = await fetch("/api/student/join-class", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, name }),
+    });
+    if (joinRes.status === 401) {
+      nameError.textContent = "Спочатку введіть код доступу класу вище.";
+      return;
+    }
+    if (!joinRes.ok) {
+      const err = await joinRes.json().catch(() => ({}));
+      nameError.textContent = (err && err.error) || "Помилка прив’язки до класу.";
+      return;
+    }
+  } catch (e) {
+    nameError.textContent = "Помилка з’єднання. Перевірте, що ви ввели код класу.";
+    return;
+  }
+
+  try {
     const res = await fetch("./db.json");
     if (!res.ok) {
       throw new Error("Не вдалося завантажити питання.");
@@ -914,34 +935,21 @@ document.addEventListener("click", (e) => {
   if (e.target && e.target.id === "finish-btn") finishTest(false);
 });
 
-// OTP: перевірка сесії та показ екрану старту або введення коду
-function showStartScreen() {
-  if (otpScreen) otpScreen.classList.add("hidden");
-  if (startScreen) startScreen.classList.remove("hidden");
-}
-
-function showOtpScreen() {
-  if (otpScreen) otpScreen.classList.remove("hidden");
-  if (startScreen) startScreen.classList.add("hidden");
-}
-
-(function initOtpGate() {
+// Усі бачать стартовий екран; тест можна почати лише після підтвердження коду класу
+(function initOtpAndRestore() {
+  // Якщо є валідний доступ і збережений тест — відновити його
   fetch("/api/otp/session", { credentials: "include" })
     .then((r) => r.json())
     .then((data) => {
-      if (data && data.valid) {
-        showStartScreen();
-        tryRestoreTest();
-      } else {
-        showOtpScreen();
-      }
+      if (data && data.valid) tryRestoreTest();
     })
-    .catch(() => showOtpScreen());
+    .catch(() => {});
 
   if (otpSubmitBtn && otpCodeInput) {
     otpSubmitBtn.addEventListener("click", () => {
       const code = otpCodeInput.value.trim();
       if (otpErrorEl) otpErrorEl.textContent = "";
+      if (otpSuccessEl) otpSuccessEl.textContent = "";
       if (!code) {
         if (otpErrorEl) otpErrorEl.textContent = "Введіть код доступу.";
         return;
@@ -956,7 +964,8 @@ function showOtpScreen() {
         .then((r) => r.json())
         .then((data) => {
           if (data && data.valid) {
-            showStartScreen();
+            if (otpErrorEl) otpErrorEl.textContent = "";
+            if (otpSuccessEl) otpSuccessEl.textContent = "Код прийнято. Тепер введіть ПІБ та пошту і натисніть «Почати тест».";
             otpCodeInput.value = "";
             tryRestoreTest();
           } else {

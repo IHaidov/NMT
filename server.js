@@ -61,20 +61,21 @@ function generateOTPCode() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
-function setStudentAccessCookie(res) {
-  const payload = JSON.stringify({ at: Date.now() });
+function setStudentAccessCookie(res, classId) {
+  const payload = JSON.stringify({ at: Date.now(), classId: classId != null ? classId : undefined });
   const value = Buffer.from(payload, "utf8").toString("base64");
   res.cookie(STUDENT_ACCESS_COOKIE, value, { signed: true, httpOnly: true, maxAge: STUDENT_ACCESS_MAX_AGE_MS });
 }
 
 function getStudentAccess(req) {
   const raw = req.signedCookies[STUDENT_ACCESS_COOKIE];
-  if (!raw) return false;
+  if (!raw) return null;
   try {
     const data = JSON.parse(Buffer.from(raw, "base64").toString("utf8"));
-    return data && typeof data.at === "number";
+    if (!data || typeof data.at !== "number") return null;
+    return { valid: true, classId: data.classId };
   } catch (e) {
-    return false;
+    return null;
   }
 }
 
@@ -135,59 +136,84 @@ app.get("/api/teachers/me", (req, res) => {
   });
 });
 
-// ——— OTP: teacher gets/regenerates code; student validates ———
-function ensureTeacherOTP(teacherId) {
+// ——— OTP по класу: кожен клас має свій код; учень вводить код і приписується до класу ———
+function ensureClassOTP(classId) {
   const now = new Date().toISOString();
-  let row = db.prepare("SELECT code, expires_at FROM teacher_otp WHERE teacher_id = ?").get(teacherId);
-  if (!row || row.expires_at <= now) {
-    const code = generateOTPCode();
-    const expiresAt = new Date(Date.now() + OTP_VALIDITY_MINUTES * 60 * 1000).toISOString();
-    db.prepare("INSERT OR REPLACE INTO teacher_otp (teacher_id, code, expires_at) VALUES (?, ?, ?)").run(teacherId, code, expiresAt);
-    row = { code, expires_at: expiresAt };
+  const classRow = db.prepare("SELECT id, otp_code, otp_expires_at FROM classes WHERE id = ?").get(classId);
+  if (!classRow) return null;
+  if (classRow.otp_code && classRow.otp_expires_at && classRow.otp_expires_at > now) {
+    return { code: classRow.otp_code, expires_at: classRow.otp_expires_at };
   }
-  return row;
-}
-
-app.get("/api/teachers/otp", (req, res) => {
-  const teacherId = getTeacherId(req);
-  if (!teacherId) return res.status(401).json({ error: "Не авторизовано" });
-  const row = ensureTeacherOTP(teacherId);
-  return res.json({ code: row.code, expires_at: row.expires_at });
-});
-
-app.post("/api/teachers/otp/regenerate", (req, res) => {
-  const teacherId = getTeacherId(req);
-  if (!teacherId) return res.status(401).json({ error: "Не авторизовано" });
-  const code = generateOTPCode();
+  let code;
+  for (let i = 0; i < 20; i++) {
+    code = generateOTPCode();
+    const existing = db.prepare("SELECT id FROM classes WHERE otp_code = ? AND otp_expires_at > ?").get(code, now);
+    if (!existing) break;
+  }
   const expiresAt = new Date(Date.now() + OTP_VALIDITY_MINUTES * 60 * 1000).toISOString();
-  db.prepare("INSERT OR REPLACE INTO teacher_otp (teacher_id, code, expires_at) VALUES (?, ?, ?)").run(teacherId, code, expiresAt);
-  return res.json({ code, expires_at: expiresAt });
-});
+  db.prepare("UPDATE classes SET otp_code = ?, otp_expires_at = ? WHERE id = ?").run(code, expiresAt, classId);
+  return { code, expires_at: expiresAt };
+}
 
 app.post("/api/otp/validate", (req, res) => {
   const { code } = req.body || {};
   const codeStr = code != null ? String(code).trim() : "";
   if (!codeStr) return res.status(400).json({ valid: false, error: "Введіть код" });
   const now = new Date().toISOString();
-  const row = db.prepare("SELECT teacher_id FROM teacher_otp WHERE code = ? AND expires_at > ?").get(codeStr, now);
+  const row = db.prepare("SELECT id FROM classes WHERE otp_code = ? AND otp_expires_at > ?").get(codeStr, now);
   if (!row) {
     return res.json({ valid: false, error: "Невірний або прострочений код" });
   }
-  setStudentAccessCookie(res);
+  setStudentAccessCookie(res, row.id);
   return res.json({ valid: true });
 });
 
 app.get("/api/otp/session", (req, res) => {
-  if (getStudentAccess(req)) return res.json({ valid: true });
+  const access = getStudentAccess(req);
+  if (access && access.valid) return res.json({ valid: true });
   return res.status(401).json({ valid: false });
+});
+
+// Учень приписується до класу (за класом із cookie), якщо його пошта ще не в цьому класі
+app.post("/api/student/join-class", (req, res) => {
+  const access = getStudentAccess(req);
+  if (!access || !access.valid || access.classId == null) {
+    return res.status(401).json({ error: "Спочатку введіть код доступу класу" });
+  }
+  const classId = access.classId;
+  const c = db.prepare("SELECT id FROM classes WHERE id = ?").get(classId);
+  if (!c) return res.status(400).json({ error: "Клас не знайдено" });
+  const { email, name } = req.body || {};
+  const emailStr = email != null ? String(email).trim() : "";
+  if (!emailStr) return res.status(400).json({ error: "Введіть пошту" });
+  const nameStr = name != null ? String(name).trim() : "";
+  const existing = db.prepare("SELECT id, class_id FROM students WHERE email = ?").get(emailStr);
+  if (existing) {
+    if (existing.class_id === classId) return res.json({ ok: true, alreadyInClass: true });
+    if (nameStr) db.prepare("UPDATE students SET name = ? WHERE id = ?").run(nameStr, existing.id);
+    db.prepare("UPDATE students SET class_id = ? WHERE id = ?").run(classId, existing.id);
+    return res.json({ ok: true });
+  }
+  db.prepare("INSERT INTO students (email, name, class_id) VALUES (?, ?, ?)").run(emailStr, nameStr, classId);
+  return res.json({ ok: true });
 });
 
 // ——— Classes (teacher only) ———
 app.get("/api/classes", (req, res) => {
   const teacherId = getTeacherId(req);
   if (!teacherId) return res.status(401).json({ error: "Не авторизовано" });
-  const rows = db.prepare("SELECT id, name, created_at FROM classes WHERE teacher_id = ? ORDER BY created_at DESC").all(teacherId);
-  return res.json({ classes: rows });
+  const rows = db.prepare("SELECT id, name, created_at, otp_code, otp_expires_at FROM classes WHERE teacher_id = ? ORDER BY created_at DESC").all(teacherId);
+  const classes = rows.map((c) => {
+    const otp = ensureClassOTP(c.id);
+    return {
+      id: c.id,
+      name: c.name,
+      created_at: c.created_at,
+      otp_code: otp ? otp.code : (c.otp_code || null),
+      otp_expires_at: otp ? otp.expires_at : (c.otp_expires_at || null),
+    };
+  });
+  return res.json({ classes });
 });
 
 app.post("/api/classes", (req, res) => {
@@ -205,10 +231,38 @@ app.get("/api/classes/:id", (req, res) => {
   const teacherId = getTeacherId(req);
   if (!teacherId) return res.status(401).json({ error: "Не авторизовано" });
   const id = parseInt(req.params.id, 10);
-  const c = db.prepare("SELECT id, name, created_at FROM classes WHERE id = ? AND teacher_id = ?").get(id, teacherId);
+  const c = db.prepare("SELECT id, name, created_at, otp_code, otp_expires_at FROM classes WHERE id = ? AND teacher_id = ?").get(id, teacherId);
   if (!c) return res.status(404).json({ error: "Клас не знайдено" });
+  const otp = ensureClassOTP(id);
   const students = db.prepare("SELECT id, email, name, created_at FROM students WHERE class_id = ? ORDER BY name, email").all(id);
-  return res.json({ class: c, students });
+  return res.json({
+    class: {
+      id: c.id,
+      name: c.name,
+      created_at: c.created_at,
+      otp_code: otp ? otp.code : (c.otp_code || null),
+      otp_expires_at: otp ? otp.expires_at : (c.otp_expires_at || null),
+    },
+    students,
+  });
+});
+
+app.post("/api/classes/:id/otp/regenerate", (req, res) => {
+  const teacherId = getTeacherId(req);
+  if (!teacherId) return res.status(401).json({ error: "Не авторизовано" });
+  const id = parseInt(req.params.id, 10);
+  const c = db.prepare("SELECT id FROM classes WHERE id = ? AND teacher_id = ?").get(id, teacherId);
+  if (!c) return res.status(404).json({ error: "Клас не знайдено" });
+  const now = new Date().toISOString();
+  let code;
+  for (let i = 0; i < 20; i++) {
+    code = generateOTPCode();
+    const existing = db.prepare("SELECT id FROM classes WHERE otp_code = ? AND otp_expires_at > ?").get(code, now);
+    if (!existing) break;
+  }
+  const expiresAt = new Date(Date.now() + OTP_VALIDITY_MINUTES * 60 * 1000).toISOString();
+  db.prepare("UPDATE classes SET otp_code = ?, otp_expires_at = ? WHERE id = ?").run(code, expiresAt, id);
+  return res.json({ code, expires_at: expiresAt });
 });
 
 // Add student to class by email (creates student if not exists; removes from other class)

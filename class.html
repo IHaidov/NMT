@@ -21,6 +21,11 @@
     .links-row { margin-bottom: 16px; }
     .links-row a { margin-right: 16px; color: #2563eb; text-decoration: none; }
     .links-row a:hover { text-decoration: underline; }
+    .otp-box { background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+    .otp-box h3 { margin: 0 0 8px 0; font-size: 1rem; }
+    .otp-code { font-size: 1.5rem; font-weight: 700; letter-spacing: 0.2em; font-family: monospace; color: #0369a1; }
+    .otp-expiry { font-size: 0.85rem; color: #5f6b7a; margin-top: 8px; }
+    .otp-box .btn { margin-top: 12px; }
   </style>
 </head>
 <body>
@@ -41,6 +46,13 @@
       <section class="card">
         <div class="class-header">
           <h2 class="class-title" id="class-name"></h2>
+        </div>
+        <div id="otp-box" class="otp-box">
+          <h3>Код доступу для учнів (OTP)</h3>
+          <p class="muted" style="margin:0 0 8px 0;">Учні вводять цей код на головній сторінці тесту — після введення пошти вони приписуються до цього класу.</p>
+          <div id="otp-code-display" class="otp-code">—</div>
+          <div id="otp-expiry-display" class="otp-expiry"></div>
+          <button type="button" id="btn-regenerate-otp" class="btn btn-secondary">Перегенерувати код</button>
         </div>
         <div class="links-row">
           <a href="#" id="link-results">Результати класу (таблиця проходжень)</a>
@@ -95,10 +107,23 @@
       function escapeAttr(v) {
         return String(v || "").replace(/&/g, "&amp;").replace(/\"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       }
+      function updateOtpDisplay(otpCode, expiresAt) {
+        var codeEl = document.getElementById("otp-code-display");
+        var expiryEl = document.getElementById("otp-expiry-display");
+        if (codeEl) codeEl.textContent = otpCode || "—";
+        if (expiryEl) {
+          var exp = expiresAt ? new Date(expiresAt) : null;
+          if (exp) {
+            if (exp <= new Date()) expiryEl.textContent = "Код прострочено. Натисніть «Перегенерувати код».";
+            else expiryEl.textContent = "Дійсний до: " + exp.toLocaleString("uk-UA");
+          } else expiryEl.textContent = "";
+        }
+      }
       function loadClass() {
         api("/api/classes/" + classId).then(function (data) {
           document.getElementById("class-name").textContent = data.class.name;
           document.getElementById("page-class-name").textContent = data.class.name;
+          updateOtpDisplay(data.class.otp_code, data.class.otp_expires_at);
           var tbody = document.getElementById("students-tbody");
           tbody.innerHTML = "";
           data.students.forEach(function (s) {
@@ -127,6 +152,15 @@
           });
         }).catch(function () {});
       }
+
+      document.getElementById("btn-regenerate-otp").addEventListener("click", function () {
+        var btn = this;
+        btn.disabled = true;
+        api("/api/classes/" + classId + "/otp/regenerate", { method: "POST" })
+          .then(function (data) { updateOtpDisplay(data.code, data.expires_at); })
+          .catch(function (e) { alert(e.message || "Помилка"); })
+          .finally(function () { btn.disabled = false; });
+      });
 
       document.getElementById("btn-add-student").addEventListener("click", function () {
         var email = document.getElementById("new-student-email").value.trim();

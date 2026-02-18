@@ -33,30 +33,21 @@
     </header>
 
     <main>
-      <!-- Екран введення OTP коду -->
-      <section id="otp-screen" class="card start-screen">
-        <h2>Код доступу до тесту</h2>
-        <p class="muted">
-          Введіть код, який надав вам вчитель, щоб продовжити.
-        </p>
-        <label class="field-label" for="otp-code">Код доступу (OTP)</label>
-        <input id="otp-code" type="text" class="text-input" placeholder="Наприклад: 123456" maxlength="8" autocomplete="one-time-code" inputmode="numeric" />
-        <p id="otp-error" class="input-error" aria-live="polite"></p>
-        <div class="start-actions">
-          <button id="otp-submit-btn" class="btn btn-primary">Продовжити</button>
-        </div>
-        <p class="start-screen-link" style="margin-top: 20px;">
-          <a href="./teacher.html" class="link-teacher">Увійти як вчитель</a> &nbsp;·&nbsp;
-          <a href="./admin.html" class="link-teacher">Увійти як адміністратор</a>
-        </p>
-      </section>
-
-      <!-- Стартовий екран (ПІБ, пошта, почати тест) -->
-      <section id="start-screen" class="card start-screen hidden">
+      <!-- Стартовий екран: всі бачать; тест — лише після підтвердження коду -->
+      <section id="start-screen" class="card start-screen">
         <h2>Почніть тренувальний варіант НМТ</h2>
         <p class="muted">
-          Уведіть ваше <strong>прізвище, ім’я та по батькові</strong>, щоб розпочати тестування.
+          Сайт доступний усім. Щоб <strong>розпочати тест</strong>, спочатку введіть код класу, який надав вчитель, потім — ПІБ та пошту.
         </p>
+        <div class="otp-block" style="margin-bottom: 20px; padding: 14px; background: #f0f9ff; border-radius: 8px; border: 1px solid #bae6fd;">
+          <label class="field-label" for="otp-code">Код доступу класу</label>
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <input id="otp-code" type="text" class="text-input" placeholder="Наприклад: 123456" maxlength="8" autocomplete="one-time-code" inputmode="numeric" style="max-width: 180px;" />
+            <button id="otp-submit-btn" type="button" class="btn btn-secondary">Підтвердити код</button>
+          </div>
+          <p id="otp-error" class="input-error" aria-live="polite" style="margin-top: 6px;"></p>
+          <p id="otp-success" class="muted" style="margin: 6px 0 0 0; font-size: 0.9rem;"></p>
+        </div>
         <label class="field-label" for="student-name">ПІБ учня</label>
         <input id="student-name" type="text" class="text-input" placeholder="Наприклад: Іваненко Марія Петрівна" />
         <label class="field-label" for="student-email">Електронна пошта</label>
@@ -67,6 +58,10 @@
         </div>
         <p class="test-meta">
           22 завдання &bull; до 60 хвилин &bull; максимальний бал: 32
+        </p>
+        <p class="start-screen-link" style="margin-top: 20px;">
+          <a href="./teacher.html" class="link-teacher">Увійти як вчитель</a> &nbsp;·&nbsp;
+          <a href="./admin.html" class="link-teacher">Увійти як адміністратор</a>
         </p>
       </section>
 
