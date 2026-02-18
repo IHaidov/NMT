@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>База питань — НМТ з математики</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <style>
+    .bank-header { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #e8eaed; }
+    .bank-header h2 { margin: 0 0 8px 0; font-size: 1.15rem; color: #1a1f2e; }
+    .bank-meta { font-size: 0.9rem; color: #5f6b7a; }
+    .question-block { margin-bottom: 32px; scroll-margin-top: 20px; }
+    .question-block .question-header { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #e8eaed; }
+    .question-block .question-index { font-weight: 600; color: #2563eb; font-size: 0.95rem; }
+    .question-block .question-topic { font-size: 0.85rem; color: #5f6b7a; margin-top: 4px; }
+    .correct-answer-label { font-size: 0.9rem; font-weight: 500; color: #0d9488; margin-top: 12px; margin-bottom: 6px; }
+    .correct-answer-value { padding: 10px 12px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; font-size: 0.95rem; display: inline-block; }
+    .matching-table .correct-cell { background: #ecfdf5; }
+  </style>
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\(', '\\)'], ['$', '$']],
+        displayMath: [['\\[', '\\]'], ['$$', '$$']]
+      },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="header-left">
+        <div class="header-text">
+          <h1>База питань</h1>
+          <p class="header-subtitle">Підготовчі завдання з Математики для національного мультипредметного тесту — перегляд усіх завдань з правильними відповідями</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <a href="./teacher.html" class="info-link"><span class="info-icon">←</span><span class="info-text">Кабінет вчителя</span></a>
+        <a href="./index.html" class="info-link"><span class="info-icon">⌂</span><span class="info-text">На головну</span></a>
+      </div>
+    </header>
+
+    <main>
+      <section class="card">
+        <div id="loading" class="muted">Завантаження питань…</div>
+        <div id="bank-root" class="hidden"></div>
+      </section>
+    </main>
+
+    <footer class="page-footer">
+      <p>Підготувала — Гайдова Віра Вікторівна · 2026</p>
+    </footer>
+  </div>
+
+  <script>
+(function () {
+  function escapeHtml(str) {
+    if (str == null) return "";
+    var div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+  function wrapLatex(latex) {
+    if (!latex) return "";
+    return "\\( " + latex + " \\)";
+  }
+  function classifyQuestion(q) {
+    if (q.answer_format === "decimal") return "short";
+    if (q.statements || q.expressions || q.segments || q.endings) return "matching";
+    if (Array.isArray(q.options) && q.options.length && q.options[0].matches) return "matching";
+    return "single";
+  }
+  function getMatchingLeftItems(q) {
+    var toLeft = function (arr) {
+      if (!Array.isArray(arr) || !arr.length) return null;
+      var first = arr[0];
+      if (first && typeof first === "object" && (first.text != null || first.latex != null)) {
+        var left = {};
+        arr.forEach(function (o) { left[o.label] = o.text != null ? o.text : (o.latex != null ? o.latex : ""); });
+        return left;
+      }
+      return null;
+    };
+    if (q.statements) { var n = toLeft(q.statements); if (n) return n; return q.statements; }
+    if (q.expressions) { var n = toLeft(q.expressions); if (n) return n; return q.expressions; }
+    if (q.segments) { var n = toLeft(q.segments); if (n) return n; return q.segments; }
+    if (Array.isArray(q.options) && q.options[0] && q.options[0].matches) {
+      var left = {};
+      q.options.forEach(function (o) { left[o.label] = o.text != null ? o.text : (o.latex != null ? o.latex : ""); });
+      return left;
+    }
+    if (q.options && !Array.isArray(q.options)) return q.options;
+    return {};
+  }
+  function getMatchingRightOptions(q) {
+    if (q.endings) return q.endings;
+    if (q.options && !Array.isArray(q.options)) return q.options;
+    if (Array.isArray(q.options)) {
+      var right = {};
+      q.options.forEach(function (o) { right[o.label] = o.text || o.latex || ""; });
+      return right;
+    }
+    return {};
+  }
+  function getMatchingAnswerPairs(q) {
+    var a = q.answer;
+    if (!a) return [];
+    if (Array.isArray(a)) {
+      return a.map(function (p) {
+        var key = p.statement || p.expression || p.segment || p.label;
+        return key ? { key: key, label: p.label } : null;
+      }).filter(Boolean);
+    }
+    if (typeof a === "object") return Object.keys(a).map(function (key) { return { key: String(key), label: String(a[key]) }; });
+    return [];
+  }
+  function rightOptionStr(rightOptions, rKey) {
+    var raw = rightOptions[rKey];
+    return raw == null ? "" : String(raw);
+  }
+  function looksLikeLatex(str) {
+    return typeof str === "string" && (str.indexOf("\\") !== -1 || str.indexOf("^{") !== -1 || str.indexOf("_{") !== -1);
+  }
+
+  var bankRoot = document.getElementById("bank-root");
+  var loading = document.getElementById("loading");
+
+  fetch("./db.json")
+    .then(function (r) { if (!r.ok) throw new Error("Не вдалося завантажити питання"); return r.json(); })
+    .then(function (questions) {
+      loading.classList.add("hidden");
+      bankRoot.classList.remove("hidden");
+
+      var list = Array.isArray(questions) ? questions : (questions.questions || questions.data || []);
+      list.forEach(function (q, idx) {
+        var type = classifyQuestion(q);
+        var block = document.createElement("div");
+        block.className = "card question-card question-block";
+        block.id = "q-" + (q.id != null ? q.id : idx + 1);
+
+        var header = document.createElement("div");
+        header.className = "question-header";
+        var indexEl = document.createElement("div");
+        indexEl.className = "question-index";
+        indexEl.textContent = "Завдання " + (idx + 1) + (q.id != null ? " (id: " + q.id + ")" : "");
+        var topicEl = document.createElement("div");
+        topicEl.className = "question-topic";
+        topicEl.textContent = q.topic || "";
+        header.appendChild(indexEl);
+        header.appendChild(topicEl);
+        block.appendChild(header);
+
+        var questionContent = document.createElement("div");
+        questionContent.className = "question-content";
+        if (q.question) {
+          var qt = document.createElement("div");
+          qt.className = "question-text";
+          qt.innerHTML = escapeHtml(q.question);
+          questionContent.appendChild(qt);
+        }
+        block.appendChild(questionContent);
+
+        if (q.image) {
+          var imgWrap = document.createElement("div");
+          imgWrap.className = "question-image-container";
+          var img = document.createElement("img");
+          img.src = q.image;
+          img.alt = "Ілюстрація до завдання";
+          imgWrap.appendChild(img);
+          block.appendChild(imgWrap);
+        }
+
+        var body = document.createElement("div");
+        body.className = "question-body";
+
+        if (type === "single") {
+          var container = document.createElement("ul");
+          container.className = "options-list";
+          var correctLabels = (q.answer || []).map(function (a) { return a.label; });
+          (q.options || []).forEach(function (opt) {
+            var li = document.createElement("li");
+            li.className = "option-item";
+            if (correctLabels.indexOf(opt.label) !== -1) li.classList.add("selected");
+            var badge = document.createElement("div");
+            badge.className = "option-label-badge";
+            badge.textContent = opt.label;
+            var content = document.createElement("div");
+            content.className = "option-content";
+            var disp = document.createElement("div");
+            disp.className = "option-main-text";
+            if (opt.latex) disp.innerHTML = wrapLatex(opt.latex); else disp.textContent = opt.text || "";
+            content.appendChild(disp);
+            li.appendChild(badge);
+            li.appendChild(content);
+            container.appendChild(li);
+          });
+          body.appendChild(container);
+        } else if (type === "matching") {
+          var leftItems = getMatchingLeftItems(q);
+          var rightOptions = getMatchingRightOptions(q);
+          var pairs = getMatchingAnswerPairs(q);
+          var pairMap = {};
+          pairs.forEach(function (p) { pairMap[p.key] = p.label; });
+          var leftKeys = Object.keys(leftItems).sort();
+          var rightKeys = Object.keys(rightOptions).sort();
+
+          var table = document.createElement("table");
+          table.className = "matching-table";
+          var thead = document.createElement("thead");
+          thead.innerHTML = "<tr><th>Початок</th><th>Правильна відповідь</th></tr>";
+          table.appendChild(thead);
+          var tbody = document.createElement("tbody");
+          leftKeys.forEach(function (key) {
+            var row = document.createElement("tr");
+            var leftTd = document.createElement("td");
+            var labelSpan = document.createElement("span");
+            labelSpan.className = "matching-label";
+            labelSpan.textContent = key + ")";
+            var contentSpan = document.createElement("span");
+            var val = leftItems[key];
+            if (val != null && typeof val === "object") val = (val.text != null ? val.text : val.latex) || "";
+            var str = val != null ? String(val) : "";
+            if (looksLikeLatex(str)) contentSpan.innerHTML = " " + wrapLatex(str); else contentSpan.textContent = " " + str;
+            leftTd.appendChild(labelSpan);
+            leftTd.appendChild(contentSpan);
+            row.appendChild(leftTd);
+
+            var rightTd = document.createElement("td");
+            rightTd.className = "correct-cell";
+            var selectedKey = pairMap[key];
+            if (selectedKey && rightOptions[selectedKey] != null) {
+              var rStr = rightOptionStr(rightOptions, selectedKey);
+              if (rStr.indexOf("\\") !== -1) {
+                rightTd.innerHTML = selectedKey + ") " + wrapLatex(rStr);
+              } else {
+                rightTd.textContent = selectedKey + ") " + rStr;
+              }
+            } else rightTd.textContent = "—";
+            row.appendChild(rightTd);
+            tbody.appendChild(row);
+          });
+          table.appendChild(tbody);
+          body.appendChild(table);
+        } else {
+          var correctStr = typeof q.answer === "string" ? q.answer : (q.answer != null ? String(q.answer) : "—");
+          var label = document.createElement("div");
+          label.className = "correct-answer-label";
+          label.textContent = "Правильна відповідь:";
+          var value = document.createElement("div");
+          value.className = "correct-answer-value";
+          if (looksLikeLatex(correctStr)) value.innerHTML = wrapLatex(correctStr); else value.textContent = correctStr;
+          body.appendChild(label);
+          body.appendChild(value);
+        }
+
+        block.appendChild(body);
+        bankRoot.appendChild(block);
+      });
+
+      if (window.MathJax && window.MathJax.typesetPromise) {
+        window.MathJax.typesetPromise([bankRoot]).catch(function () {});
+      }
+    })
+    .catch(function (err) {
+      loading.textContent = "Помилка завантаження: " + (err.message || "невідома помилка");
+    });
+})();
+  </script>
+</body>
+</html>
