@@ -99,7 +99,8 @@
       }
 
       const RESULT_KEY = "nmt-test-result";
-      const raw = sessionStorage.getItem(RESULT_KEY);
+      var raw = sessionStorage.getItem(RESULT_KEY);
+      if (!raw) raw = localStorage.getItem(RESULT_KEY);
       const noDataMsg = document.getElementById("no-data-msg");
       const resultBody = document.getElementById("result-body");
 

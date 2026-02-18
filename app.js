@@ -824,8 +824,12 @@ function saveResultAndRedirect(result, studentEmail) {
   const payload = buildResultPayload(result, studentName);
   const fullAnswers = buildFullAnswers(result);
   payload.answers = fullAnswers;
+  const json = JSON.stringify(payload);
   try {
-    sessionStorage.setItem(RESULT_STORAGE_KEY, JSON.stringify(payload));
+    sessionStorage.setItem(RESULT_STORAGE_KEY, json);
+    try {
+      localStorage.setItem(RESULT_STORAGE_KEY, json);
+    } catch (_) {}
   } catch (e) {
     console.warn("Не вдалося зберегти результат", e);
   }
@@ -841,7 +845,10 @@ function saveResultAndRedirect(result, studentEmail) {
       incorrect: payload.incorrect,
     }),
   }).catch(() => {});
-  window.location.href = "results.html";
+  // Невелика затримка, щоб браузер встиг записати storage перед переходом (особливо при завершенні по таймеру)
+  setTimeout(function () {
+    window.location.href = "results.html";
+  }, 50);
 }
 
 function finishTest(auto = false) {
@@ -876,9 +883,15 @@ function finishTest(auto = false) {
       const name = studentNameDisplay ? studentNameDisplay.textContent : "";
       const payload = buildResultPayload(fallback, name || "");
       payload.answers = buildFullAnswers(fallback);
-      sessionStorage.setItem(RESULT_STORAGE_KEY, JSON.stringify(payload));
+      const json = JSON.stringify(payload);
+      sessionStorage.setItem(RESULT_STORAGE_KEY, json);
+      try {
+        localStorage.setItem(RESULT_STORAGE_KEY, json);
+      } catch (_) {}
     } catch (_) {}
-    window.location.href = "results.html";
+    setTimeout(function () {
+      window.location.href = "results.html";
+    }, 50);
   }
 }
 
