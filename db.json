@@ -1412,20 +1412,6 @@
         "answer": [{ "label": "Б" }]
       },
       {
-        "id": 124,
-        "topic": "Функції, прогресії",
-        "question": "Знайдіть область визначення функції \\(y=\\lg (x-5)^{2}\\).",
-        "latex": "y=\\lg\\bigl((x-5)^{2}\\bigr)",
-        "options": [
-          { "label": "А", "text": "\\((-\\infty;+\\infty)\\)" },
-          { "label": "Б", "text": "\\((5;+\\infty)\\)" },
-          { "label": "В", "text": "\\((-\\infty;5)\\cup(5;+\\infty)\\)" },
-          { "label": "Г", "text": "\\((0;+\\infty)\\)" },
-          { "label": "Д", "text": "\\((-\\infty;0)\\cup(0;+\\infty)\\)" }
-        ],
-        "answer": [{ "label": "В" }]
-      },
-      {
         "id": 126,
         "topic": "Числа і вирази",
         "question": "Обчисліть значення виразу \\(\\sqrt{(\\log_{\\frac13}9)^{2}}\\).",
