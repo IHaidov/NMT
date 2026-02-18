@@ -4,7 +4,7 @@ const SINGLE_CHOICE_COUNT = 15;
 const MATCHING_COUNT = 3;
 const SHORT_COUNT = 4;
 const MAX_SCORE = 32;
-const TEST_DURATION_MINUTES = 90;
+const TEST_DURATION_MINUTES = 60;
 const STORAGE_KEY = "nmt-test-state";
 const RESULT_STORAGE_KEY = "nmt-test-result";
 
