@@ -56,20 +56,6 @@
       ]
     },
     {
-      "id": 5,
-      "topic": "Числа і вирази",
-      "question": "Знайдіть \\(\\left|2-\\sqrt{7}\\right|\\) =",
-      "latex": "\\left|2-\\sqrt{7}\\right|",
-      "answer": [{ "label": "В", "text": "2 − √7", "latex": "2-\\sqrt{7}" }],
-      "options": [
-        { "label": "А", "text": "2 + √7", "latex": "2+\\sqrt{7}" },
-        { "label": "Б", "text": "√3", "latex": "\\sqrt{3}" },
-        { "label": "В", "text": "2 − √7", "latex": "2-\\sqrt{7}" },
-        { "label": "Г", "text": "√7 − 2", "latex": "\\sqrt{7}-2" },
-        { "label": "Д", "text": "√5", "latex": "\\sqrt{5}" }
-      ]
-    },
-    {
       "id": 6,
       "topic": "Числа і вирази",
       "question": "Обчисліть \\(\\left(4^{\\frac{2}{3}}\\right)^{2}\\).",
@@ -214,7 +200,7 @@
       "latex": "a+0{,}3\\quad \\text{за умови}\\quad a=10",
       "answer": [{ "label": "Г", "text": "1", "latex": "1" }],
       "options": [
-        { "label": "А", "text": "10,3", "latex": "10{,}3" },
+        { "label": "А", "text": "10,03", "latex": "10{,}03" },
         { "label": "Б", "text": "10,3", "latex": "10{,}3" },
         { "label": "В", "text": "9,7", "latex": "9{,}7" },
         { "label": "Г", "text": "1", "latex": "1" },
