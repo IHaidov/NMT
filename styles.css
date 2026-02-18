@@ -430,11 +430,6 @@ body.test-active .app-header .header-right {
   font-size: 0.95rem;
 }
 
-.question-topic {
-  font-size: 0.85rem;
-  color: #5f6b7a;
-}
-
 .flag-btn {
   border-radius: 8px;
   border: 1px solid #e0d4a8;

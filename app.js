@@ -31,7 +31,6 @@ const timerEl = document.getElementById("timer");
 const questionGrid = document.getElementById("question-grid");
 const questionCard = document.getElementById("question-card");
 const questionIndexEl = document.getElementById("question-index");
-const questionTopicEl = document.getElementById("question-topic");
 const questionContentEl = document.getElementById("question-content");
 const questionImageEl = document.getElementById("question-image");
 const questionBodyEl = document.getElementById("question-body");
@@ -96,27 +95,76 @@ function clearTestState() {
   sessionStorage.removeItem(STORAGE_KEY);
 }
 
+// Теми для відповідностей: 2 з алгебри (різні), 1 з геометрії
+const ALGEBRA_TOPICS = [
+  "Числа і вирази",
+  "Рівняння і нерівності",
+  "Функції, прогресії",
+  "Елементи комбінаторики, початки теорії ймовірностей та елементи статистики",
+];
+const GEOMETRY_TOPICS = ["Планіметрія", "Стереометрія"];
+// Завдання відкритої форми за номерами: 19 — функції/прогресії, 20 — комбінаторика/ймовірність, 21 — стереометрія, 22 — параметр
+const SHORT_TOPIC_BY_SLOT = {
+  19: "Функції, прогресії",
+  20: "Елементи комбінаторики, початки теорії ймовірностей та елементи статистики",
+  21: "Стереометрія",
+  22: "Параметр",
+};
+
 function prepareTestQuestions() {
   const singles = allQuestions.filter((q) => classifyQuestion(q) === "single");
   const matchings = allQuestions.filter((q) => classifyQuestion(q) === "matching");
   const shorts = allQuestions.filter((q) => classifyQuestion(q) === "short");
 
   const selectedSingles = shuffle(singles).slice(0, SINGLE_CHOICE_COUNT);
-  const selectedMatchings = shuffle(matchings).slice(0, MATCHING_COUNT);
-  const selectedShorts = shuffle(shorts).slice(0, SHORT_COUNT);
 
-  // Питання з відкритою відповіддю мають бути в кінці
-  // Спочатку перемішуємо single та matching разом, потім додаємо short в кінці
-  const firstPart = [...selectedSingles, ...selectedMatchings];
-  const shuffledFirstPart = shuffle(firstPart);
-  let combined = [...shuffledFirstPart, ...selectedShorts];
-
-  // Якщо раптом не вистачило якихось типів — добираємо з решти питань (але не short)
-  if (combined.length < TOTAL_QUESTIONS) {
-    const usedIds = new Set(combined.map((q) => q.id));
-    const remaining = shuffle(allQuestions.filter((q) => !usedIds.has(q.id) && classifyQuestion(q) !== "short"));
-    combined = [...shuffledFirstPart, ...remaining.slice(0, TOTAL_QUESTIONS - combined.length), ...selectedShorts];
+  // Відповідності: 2 з алгебри (різні теми), 1 з геометрії
+  const matchingByTopic = {};
+  matchings.forEach((q) => {
+    const t = q.topic || "";
+    if (!matchingByTopic[t]) matchingByTopic[t] = [];
+    matchingByTopic[t].push(q);
+  });
+  const selectedMatchings = [];
+  const algebraAvailable = ALGEBRA_TOPICS.filter((t) => matchingByTopic[t] && matchingByTopic[t].length > 0);
+  const geometryAvailable = GEOMETRY_TOPICS.filter((t) => matchingByTopic[t] && matchingByTopic[t].length > 0);
+  const usedAlgebraTopics = new Set();
+  for (let i = 0; i < 2 && usedAlgebraTopics.size < algebraAvailable.length; i++) {
+    const topic = algebraAvailable.find((t) => !usedAlgebraTopics.has(t));
+    if (!topic) break;
+    const pool = shuffle(matchingByTopic[topic]);
+    if (pool.length) {
+      selectedMatchings.push(pool[0]);
+      usedAlgebraTopics.add(topic);
+    }
   }
+  if (geometryAvailable.length > 0) {
+    const geomTopic = geometryAvailable[Math.floor(Math.random() * geometryAvailable.length)];
+    const pool = shuffle(matchingByTopic[geomTopic]).filter((q) => !selectedMatchings.includes(q));
+    if (pool.length) selectedMatchings.push(pool[0]);
+    else if (matchingByTopic[geomTopic].length) selectedMatchings.push(matchingByTopic[geomTopic][0]);
+  }
+  // Якщо не набрали 3 — добираємо з решти matching
+  while (selectedMatchings.length < MATCHING_COUNT) {
+    const rest = matchings.filter((q) => !selectedMatchings.includes(q));
+    if (!rest.length) break;
+    selectedMatchings.push(shuffle(rest)[0]);
+  }
+
+  // Відкрита форма: по одному завданню на тему для слотів 19–22
+  const selectedShorts = [];
+  [19, 20, 21, 22].forEach((slot) => {
+    const needTopic = SHORT_TOPIC_BY_SLOT[slot];
+    const pool = shorts.filter((q) => (q.topic || "") === needTopic && !selectedShorts.includes(q));
+    if (pool.length) {
+      selectedShorts.push(shuffle(pool)[0]);
+    } else {
+      const anyShort = shorts.find((q) => !selectedShorts.includes(q));
+      if (anyShort) selectedShorts.push(anyShort);
+    }
+  });
+
+  const combined = [...selectedSingles, ...selectedMatchings, ...selectedShorts];
 
   testQuestions = combined.map((q) => ({
     id: q.id,
@@ -479,8 +527,7 @@ function renderQuestion(index) {
   const q = qObj.raw;
 
   questionIndexEl.textContent = `Завдання ${index + 1} з ${testQuestions.length}`;
-  questionTopicEl.textContent = q.topic || "";
-  
+
   // Питання: HTML з екрануванням, щоб inline LaTeX \(...\) міг бути відрендерений MathJax при кожному переході
   questionContentEl.innerHTML = "";
   if (q.question) {
