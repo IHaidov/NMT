@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Адмін — НМТ</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <style>
+    .admin-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+    .admin-tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+    .admin-tab { padding: 10px 18px; border: 1px solid #d0d5dc; background: #f5f6f8; cursor: pointer; border-radius: 8px; }
+    .admin-tab.active { background: #fff; border-color: #2563eb; }
+    .admin-panel { display: none; }
+    .admin-panel.active { display: block; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .data-table th, .data-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #e8eaed; }
+    .data-table th { color: #5f6b7a; font-weight: 500; }
+    .data-table a { color: #2563eb; text-decoration: none; }
+    .btn-small { padding: 6px 12px; font-size: 0.85rem; margin-right: 4px; }
+    .auth-box { max-width: 400px; margin: 40px auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }
+    .auth-box h2 { margin-top: 0; }
+    .auth-box .field-label { display: block; margin-top: 12px; }
+    .auth-box .text-input { width: 100%; margin-top: 4px; }
+    .auth-box .start-actions { margin-top: 16px; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 100; }
+    .modal-overlay.show { display: flex; }
+    .modal { background: #fff; padding: 24px; border-radius: 8px; max-width: 480px; width: 90%; max-height: 90vh; overflow: auto; }
+    .modal h3 { margin-top: 0; }
+    .modal .field-label { display: block; margin-top: 10px; }
+    .modal .text-input { width: 100%; margin-top: 4px; }
+    .modal-actions { margin-top: 20px; display: flex; gap: 8px; }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="header-left">
+        <div class="header-text">
+          <h1>Панель адміністратора</h1>
+          <p class="header-subtitle">Вчителі, класи, учні</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <span id="admin-email" class="muted"></span>
+        <a href="./teacher.html" class="info-link">Кабінет вчителя</a>
+        <button type="button" id="btn-logout" class="btn btn-secondary">Вийти</button>
+      </div>
+    </header>
+
+    <main id="admin-login" class="auth-box">
+      <h2>Вхід для адміністратора</h2>
+      <label class="field-label">Пошта</label>
+      <input type="email" id="login-email" class="text-input" placeholder="vanya.haidov@gmail.com" />
+      <label class="field-label">Пароль</label>
+      <input type="password" id="login-password" class="text-input" />
+      <p id="login-error" class="input-error"></p>
+      <div class="start-actions">
+        <button type="button" id="btn-login" class="btn btn-primary">Увійти</button>
+      </div>
+    </main>
+
+    <main id="admin-dashboard" class="hidden">
+      <div class="admin-header">
+        <h2 id="dashboard-title">Вчителі</h2>
+        <button type="button" id="btn-add" class="btn btn-primary">Додати</button>
+      </div>
+      <div class="admin-tabs">
+        <button type="button" class="admin-tab active" data-tab="teachers">Вчителі</button>
+        <button type="button" class="admin-tab" data-tab="classes">Класи</button>
+        <button type="button" class="admin-tab" data-tab="students">Учні</button>
+      </div>
+      <div id="panel-teachers" class="admin-panel active card">
+        <div style="overflow-x:auto;">
+          <table class="data-table">
+            <thead><tr><th>ПІБ</th><th>Пошта</th><th>Школа</th><th>Місто</th><th>Дії</th></tr></thead>
+            <tbody id="teachers-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="panel-classes" class="admin-panel card">
+        <div style="overflow-x:auto;">
+          <table class="data-table">
+            <thead><tr><th>Клас</th><th>Вчитель</th><th>Дії</th></tr></thead>
+            <tbody id="classes-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="panel-students" class="admin-panel card">
+        <div style="overflow-x:auto;">
+          <table class="data-table">
+            <thead><tr><th>ПІБ</th><th>Пошта</th><th>Клас</th><th>Вчитель</th><th>Дії</th></tr></thead>
+            <tbody id="students-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="modal-overlay" class="modal-overlay">
+    <div class="modal">
+      <h3 id="modal-title">Редагувати</h3>
+      <div id="modal-body"></div>
+      <div class="modal-actions">
+        <button type="button" id="modal-save" class="btn btn-primary">Зберегти</button>
+        <button type="button" id="modal-cancel" class="btn btn-secondary">Скасувати</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="page-footer">
+    <p>Підготувала — Гайдова Віра Вікторівна · 2025</p>
+  </footer>
+
+  <script>
+    (function () {
+      const ADMIN_EMAIL = "vanya.haidov@gmail.com";
+      const loginScreen = document.getElementById("admin-login");
+      const dashboard = document.getElementById("admin-dashboard");
+      const overlay = document.getElementById("modal-overlay");
+      let currentTab = "teachers";
+      let modalMode = null;
+      let modalId = null;
+
+      function api(path, opts) {
+        return fetch(path, { credentials: "include", ...opts }).then(function (r) {
+          if (r.status === 401) { showLogin(); return Promise.reject(new Error("Не авторизовано")); }
+          if (r.status === 403) { showLogin(); return Promise.reject(new Error("Доступ заборонено")); }
+          return r.json().then(function (data) { if (!r.ok) throw new Error(data.error || "Помилка"); return data; });
+        });
+      }
+
+      function showLogin() {
+        loginScreen.classList.remove("hidden");
+        dashboard.classList.add("hidden");
+      }
+      function showDashboard() {
+        loginScreen.classList.add("hidden");
+        dashboard.classList.remove("hidden");
+        loadTab(currentTab);
+      }
+
+      document.getElementById("btn-login").addEventListener("click", function () {
+        var email = document.getElementById("login-email").value.trim();
+        var password = document.getElementById("login-password").value;
+        document.getElementById("login-error").textContent = "";
+        if (!email || !password) { document.getElementById("login-error").textContent = "Введіть пошту та пароль"; return; }
+        api("/api/teachers/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: email, password: password }) })
+          .then(function (data) {
+            if (!data.teacher || !data.teacher.isAdmin) {
+              document.getElementById("login-error").textContent = "Доступ лише для адміністратора";
+              return;
+            }
+            document.getElementById("admin-email").textContent = data.teacher.email;
+            showDashboard();
+          })
+          .catch(function (e) { document.getElementById("login-error").textContent = e.message || "Помилка"; });
+      });
+
+      document.getElementById("btn-logout").addEventListener("click", function () {
+        fetch("/api/teachers/logout", { method: "POST", credentials: "include" }).then(function () { showLogin(); });
+      });
+
+      document.querySelectorAll(".admin-tab").forEach(function (tab) {
+        tab.addEventListener("click", function () {
+          currentTab = tab.dataset.tab;
+          document.querySelectorAll(".admin-tab").forEach(function (t) { t.classList.remove("active"); });
+          document.querySelectorAll(".admin-panel").forEach(function (p) { p.classList.remove("active"); });
+          tab.classList.add("active");
+          document.getElementById("panel-" + currentTab).classList.add("active");
+          document.getElementById("dashboard-title").textContent = currentTab === "teachers" ? "Вчителі" : currentTab === "classes" ? "Класи" : "Учні";
+          loadTab(currentTab);
+        });
+      });
+
+      document.getElementById("btn-add").addEventListener("click", function () {
+        if (currentTab === "teachers") openTeacherModal(null);
+        else if (currentTab === "classes") openClassModal(null);
+        else openStudentModal(null);
+      });
+
+      document.getElementById("modal-cancel").addEventListener("click", function () { overlay.classList.remove("show"); });
+      document.getElementById("modal-save").addEventListener("click", function () { saveModal(); });
+      overlay.addEventListener("click", function (e) { if (e.target === overlay) overlay.classList.remove("show"); });
+
+      function openTeacherModal(id) {
+        modalMode = "teacher";
+        modalId = id;
+        document.getElementById("modal-title").textContent = id ? "Редагувати вчителя" : "Додати вчителя";
+        var body = document.getElementById("modal-body");
+        if (id) {
+          api("/api/admin/teachers/" + id).then(function (data) {
+            var t = data.teacher;
+            body.innerHTML = "<label class=\"field-label\">ПІБ</label><input type=\"text\" id=\"m-name\" class=\"text-input\" value=\"" + escAttr(t.name) + "\" />" +
+              "<label class=\"field-label\">Пошта</label><input type=\"email\" id=\"m-email\" class=\"text-input\" value=\"" + escAttr(t.email) + "\" />" +
+              "<label class=\"field-label\">Пароль (залишити порожнім, щоб не змінювати)</label><input type=\"password\" id=\"m-password\" class=\"text-input\" placeholder=\"Новий пароль\" />" +
+              "<label class=\"field-label\">Школа</label><input type=\"text\" id=\"m-school\" class=\"text-input\" value=\"" + escAttr(t.school) + "\" />" +
+              "<label class=\"field-label\">Місто</label><input type=\"text\" id=\"m-city\" class=\"text-input\" value=\"" + escAttr(t.city) + "\" />";
+            overlay.classList.add("show");
+          });
+        } else {
+          body.innerHTML = "<label class=\"field-label\">ПІБ</label><input type=\"text\" id=\"m-name\" class=\"text-input\" placeholder=\"ПІБ вчителя\" />" +
+            "<label class=\"field-label\">Пошта</label><input type=\"email\" id=\"m-email\" class=\"text-input\" placeholder=\"email@school.ua\" />" +
+            "<label class=\"field-label\">Пароль</label><input type=\"password\" id=\"m-password\" class=\"text-input\" placeholder=\"Пароль для входу\" />" +
+            "<label class=\"field-label\">Школа</label><input type=\"text\" id=\"m-school\" class=\"text-input\" placeholder=\"Назва школи\" />" +
+            "<label class=\"field-label\">Місто</label><input type=\"text\" id=\"m-city\" class=\"text-input\" placeholder=\"Місто\" />";
+          overlay.classList.add("show");
+        }
+      }
+
+      function openClassModal(id) {
+        modalMode = "class";
+        modalId = id;
+        api("/api/admin/teachers").then(function (data) {
+          var opts = data.teachers.map(function (t) {
+            return "<option value=\"" + t.id + "\"" + (id && t.id === window._classTeacherId ? " selected" : "") + ">" + escHtml(t.name) + " (" + escHtml(t.email) + ")</option>";
+          }).join("");
+          document.getElementById("modal-title").textContent = id ? "Редагувати клас" : "Додати клас";
+          var body = document.getElementById("modal-body");
+          if (id) {
+            api("/api/admin/classes/" + id).then(function (cData) {
+              window._classTeacherId = cData.class.teacher_id;
+              body.innerHTML = "<label class=\"field-label\">Назва класу</label><input type=\"text\" id=\"m-name\" class=\"text-input\" value=\"" + escAttr(cData.class.name) + "\" />" +
+                "<label class=\"field-label\">Вчитель</label><select id=\"m-teacher-id\" class=\"text-input\">" + data.teachers.map(function (t) {
+                  return "<option value=\"" + t.id + "\"" + (t.id === cData.class.teacher_id ? " selected" : "") + ">" + escHtml(t.name) + "</option>";
+                }).join("") + "</select>";
+              overlay.classList.add("show");
+            });
+          } else {
+            body.innerHTML = "<label class=\"field-label\">Назва класу</label><input type=\"text\" id=\"m-name\" class=\"text-input\" placeholder=\"Назва класу\" />" +
+              "<label class=\"field-label\">Вчитель</label><select id=\"m-teacher-id\" class=\"text-input\">" + opts + "</select>";
+            overlay.classList.add("show");
+          }
+        });
+      }
+
+      function openStudentModal(id) {
+        modalMode = "student";
+        modalId = id;
+        Promise.all([api("/api/admin/classes"), id ? api("/api/admin/students/" + id) : Promise.resolve(null)]).then(function (results) {
+          var classes = results[0].classes;
+          var student = results[1] ? results[1].student : null;
+          var classOpts = "<option value=\"\">— Без класу —</option>" + classes.map(function (c) {
+            return "<option value=\"" + c.id + "\"" + (student && student.class_id === c.id ? " selected" : "") + ">" + escHtml(c.name) + " (" + escHtml(c.teacher_name) + ")</option>";
+          }).join("");
+          document.getElementById("modal-title").textContent = id ? "Редагувати учня" : "Додати учня";
+          var body = document.getElementById("modal-body");
+          body.innerHTML = "<label class=\"field-label\">ПІБ</label><input type=\"text\" id=\"m-name\" class=\"text-input\" value=\"" + (student ? escAttr(student.name) : "") + "\" placeholder=\"ПІБ учня\" />" +
+            "<label class=\"field-label\">Пошта</label><input type=\"email\" id=\"m-email\" class=\"text-input\" value=\"" + (student ? escAttr(student.email) : "") + "\" placeholder=\"email@school.ua\" />" +
+            "<label class=\"field-label\">Клас</label><select id=\"m-class-id\" class=\"text-input\">" + classOpts + "</select>";
+          overlay.classList.add("show");
+        });
+      }
+
+      function saveModal() {
+        if (modalMode === "teacher") {
+          var payload = { name: document.getElementById("m-name").value.trim(), email: document.getElementById("m-email").value.trim(), school: document.getElementById("m-school").value.trim(), city: document.getElementById("m-city").value.trim() };
+          var pwd = document.getElementById("m-password").value;
+          if (modalId) { if (pwd) payload.password = pwd; }
+          else { payload.password = pwd || "temp"; }
+          var url = modalId ? "/api/admin/teachers/" + modalId : "/api/admin/teachers";
+          var method = modalId ? "PUT" : "POST";
+          api(url, { method: method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+            .then(function () { overlay.classList.remove("show"); loadTab("teachers"); }).catch(function (e) { alert(e.message); });
+        } else if (modalMode === "class") {
+          var name = document.getElementById("m-name").value.trim();
+          var teacher_id = document.getElementById("m-teacher-id").value;
+          if (!name) { alert("Назва класу обов'язкова"); return; }
+          var url = modalId ? "/api/admin/classes/" + modalId : "/api/admin/classes";
+          api(url, { method: modalId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(modalId ? { name: name, teacher_id: parseInt(teacher_id, 10) } : { name: name, teacher_id: parseInt(teacher_id, 10) }) })
+            .then(function () { overlay.classList.remove("show"); loadTab("classes"); }).catch(function (e) { alert(e.message); });
+        } else if (modalMode === "student") {
+          var name = document.getElementById("m-name").value.trim();
+          var email = document.getElementById("m-email").value.trim();
+          var classId = document.getElementById("m-class-id").value;
+          if (!email) { alert("Пошта обов'язкова"); return; }
+          var url = modalId ? "/api/admin/students/" + modalId : "/api/admin/students";
+          var body = { email: email, name: name, class_id: classId ? parseInt(classId, 10) : null };
+          api(url, { method: modalId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+            .then(function () { overlay.classList.remove("show"); loadTab("students"); }).catch(function (e) { alert(e.message); });
+        }
+      }
+
+      function loadTab(tab) {
+        if (tab === "teachers") {
+          api("/api/admin/teachers").then(function (data) {
+            var tbody = document.getElementById("teachers-tbody");
+            tbody.innerHTML = data.teachers.map(function (t) {
+              return "<tr><td>" + escHtml(t.name) + "</td><td>" + escHtml(t.email) + "</td><td>" + escHtml(t.school || "—") + "</td><td>" + escHtml(t.city || "—") + "</td><td>" +
+                (t.is_admin ? "<span class=\"muted\">Адмін</span>" : "<button type=\"button\" class=\"btn btn-small btn-edit-teacher\" data-id=\"" + t.id + "\">Редагувати</button> <button type=\"button\" class=\"btn btn-small btn-delete-teacher\" data-id=\"" + t.id + "\">Видалити</button>") + "</td></tr>";
+            }).join("");
+            tbody.querySelectorAll(".btn-edit-teacher").forEach(function (btn) {
+              btn.addEventListener("click", function () { openTeacherModal(parseInt(btn.dataset.id, 10)); });
+            });
+            tbody.querySelectorAll(".btn-delete-teacher").forEach(function (btn) {
+              btn.addEventListener("click", function () {
+                if (!confirm("Видалити цього вчителя та всі його класи?")) return;
+                api("/api/admin/teachers/" + btn.dataset.id, { method: "DELETE" }).then(function () { loadTab("teachers"); }).catch(alert);
+              });
+            });
+          }).catch(function () {});
+        } else if (tab === "classes") {
+          api("/api/admin/classes").then(function (data) {
+            var tbody = document.getElementById("classes-tbody");
+            tbody.innerHTML = data.classes.map(function (c) {
+              return "<tr><td><a href=\"class.html?id=" + c.id + "\">" + escHtml(c.name) + "</a></td><td>" + escHtml(c.teacher_name) + " (" + escHtml(c.teacher_email) + ")</td><td>" +
+                "<button type=\"button\" class=\"btn btn-small btn-edit-class\" data-id=\"" + c.id + "\">Редагувати</button> <button type=\"button\" class=\"btn btn-small btn-delete-class\" data-id=\"" + c.id + "\">Видалити</button></td></tr>";
+            }).join("");
+            tbody.querySelectorAll(".btn-edit-class").forEach(function (btn) {
+              btn.addEventListener("click", function () { openClassModal(parseInt(btn.dataset.id, 10)); });
+            });
+            tbody.querySelectorAll(".btn-delete-class").forEach(function (btn) {
+              btn.addEventListener("click", function () {
+                if (!confirm("Видалити цей клас? Учні будуть відв’язані від класу.")) return;
+                api("/api/admin/classes/" + btn.dataset.id, { method: "DELETE" }).then(function () { loadTab("classes"); }).catch(alert);
+              });
+            });
+          }).catch(function () {});
+        } else if (tab === "students") {
+          api("/api/admin/students").then(function (data) {
+            var tbody = document.getElementById("students-tbody");
+            tbody.innerHTML = data.students.map(function (s) {
+              return "<tr><td><a href=\"student.html?id=" + s.id + "\">" + escHtml(s.name || "—") + "</a></td><td>" + escHtml(s.email) + "</td><td>" + escHtml(s.class_name || "—") + "</td><td>" + escHtml(s.teacher_name || "—") + "</td><td>" +
+                "<button type=\"button\" class=\"btn btn-small btn-edit-student\" data-id=\"" + s.id + "\">Редагувати</button> <button type=\"button\" class=\"btn btn-small btn-delete-student\" data-id=\"" + s.id + "\">Видалити</button></td></tr>";
+            }).join("");
+            tbody.querySelectorAll(".btn-edit-student").forEach(function (btn) {
+              btn.addEventListener("click", function () { openStudentModal(parseInt(btn.dataset.id, 10)); });
+            });
+            tbody.querySelectorAll(".btn-delete-student").forEach(function (btn) {
+              btn.addEventListener("click", function () {
+                if (!confirm("Видалити цього учня з системи?")) return;
+                api("/api/admin/students/" + btn.dataset.id, { method: "DELETE" }).then(function () { loadTab("students"); }).catch(alert);
+              });
+            });
+          }).catch(function () {});
+        }
+      }
+
+      function escHtml(s) {
+        if (s == null) return "";
+        var d = document.createElement("div");
+        d.textContent = s;
+        return d.innerHTML;
+      }
+      function escAttr(s) {
+        return String(s || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      }
+
+      api("/api/teachers/me").then(function (data) {
+        if (data.teacher && data.teacher.isAdmin) {
+          document.getElementById("admin-email").textContent = data.teacher.email;
+          showDashboard();
+        } else showLogin();
+      }).catch(function () { showLogin(); });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Клас — НМТ</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <style>
+    .class-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+    .class-title { margin: 0; }
+    .add-student-row { display: flex; gap: 8px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+    .add-student-row input { width: 260px; max-width: 100%; }
+    .students-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    .students-table th, .students-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e8eaed; }
+    .students-table th { color: #5f6b7a; font-weight: 500; }
+    .students-table a { color: #2563eb; text-decoration: none; }
+    .students-table a:hover { text-decoration: underline; }
+    .sortable { cursor: pointer; user-select: none; }
+    .sortable:hover { color: #2563eb; }
+    .btn-small { padding: 6px 12px; font-size: 0.85rem; }
+    .links-row { margin-bottom: 16px; }
+    .links-row a { margin-right: 16px; color: #2563eb; text-decoration: none; }
+    .links-row a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="header-left">
+        <div class="header-text">
+          <h1 id="page-class-name">Клас</h1>
+          <p class="header-subtitle">Список учнів та результати</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <a href="./teacher.html" class="info-link"><span class="info-icon">←</span><span class="info-text">Мої класи</span></a>
+      </div>
+    </header>
+
+    <main>
+      <section class="card">
+        <div class="class-header">
+          <h2 class="class-title" id="class-name"></h2>
+        </div>
+        <div class="links-row">
+          <a href="#" id="link-results">Результати класу (таблиця проходжень)</a>
+        </div>
+        <div class="add-student-row">
+          <input type="text" id="new-student-name" class="text-input" placeholder="ПІБ учня" style="width:220px;" />
+          <input type="email" id="new-student-email" class="text-input" placeholder="Пошта учня" />
+          <button type="button" id="btn-add-student" class="btn btn-primary btn-small">Додати учня</button>
+          <span id="add-student-msg" class="muted"></span>
+        </div>
+        <table class="students-table">
+          <thead><tr><th>ПІБ</th><th>Пошта</th><th>Дії</th></tr></thead>
+          <tbody id="students-tbody"></tbody>
+        </table>
+        <div id="results-section" class="hidden" style="margin-top:24px;">
+          <h3>Результати проходжень тесту</h3>
+          <div class="add-student-row" style="margin-bottom:12px;">
+            <input type="text" id="filter-search" class="text-input" placeholder="Пошук за ПІБ або поштою" style="width:200px;" />
+            <input type="date" id="filter-from" class="text-input" style="width:140px;" />
+            <input type="date" id="filter-to" class="text-input" style="width:140px;" />
+            <input type="number" id="filter-min-score" class="text-input" placeholder="Мін. бал" style="width:90px;" min="0" max="32" />
+            <input type="number" id="filter-max-score" class="text-input" placeholder="Макс. бал" style="width:90px;" min="0" max="32" />
+            <button type="button" id="btn-apply-filters" class="btn btn-secondary btn-small">Застосувати</button>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="students-table" id="results-table">
+              <thead><tr><th class="sortable" data-sort="student_name">Учень</th><th>Пошта</th><th class="sortable" data-sort="created_at">Дата</th><th class="sortable" data-sort="score">Бал</th><th class="sortable" data-sort="percent">%</th><th>Деталі</th></tr></thead>
+              <tbody id="results-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="page-footer">
+      <p>Підготувала — Гайдова Віра Вікторівна · 2025 · <a href="https://github.com/IHaidov/NMT" target="_blank" rel="noopener">Репозиторій проєкту</a></p>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      var classId = parseInt((location.search.match(/id=(\d+)/) || [])[1], 10);
+      if (!classId) { location.href = "teacher.html"; return; }
+
+      function api(path, opts) {
+        return fetch(path, { credentials: "include", ...opts }).then(function (r) {
+          if (r.status === 401) { location.href = "teacher.html"; return Promise.reject(); }
+          return r.json().then(function (data) { if (!r.ok) throw new Error(data.error || "Помилка"); return data; });
+        });
+      }
+
+      function escapeAttr(v) {
+        return String(v || "").replace(/&/g, "&amp;").replace(/\"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      }
+      function loadClass() {
+        api("/api/classes/" + classId).then(function (data) {
+          document.getElementById("class-name").textContent = data.class.name;
+          document.getElementById("page-class-name").textContent = data.class.name;
+          var tbody = document.getElementById("students-tbody");
+          tbody.innerHTML = "";
+          data.students.forEach(function (s) {
+            var tr = document.createElement("tr");
+            tr.innerHTML = "<td><a href=\"student.html?id=" + s.id + "\">" + escapeHtml(s.name || "—") + "</a></td><td>" + escapeHtml(s.email) + "</td><td><button type=\"button\" class=\"btn btn-secondary btn-small btn-edit\" data-id=\"" + s.id + "\" data-name=\"" + escapeAttr(s.name || "") + "\" data-email=\"" + escapeAttr(s.email || "") + "\">Редагувати</button> <button type=\"button\" class=\"btn btn-secondary btn-small btn-remove\" data-id=\"" + s.id + "\">Видалити з класу</button></td>";
+            tbody.appendChild(tr);
+          });
+          document.querySelectorAll(".btn-edit").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+              var name = prompt("ПІБ учня:", btn.dataset.name || "");
+              if (name === null) return;
+              var email = prompt("Пошта учня:", btn.dataset.email || "");
+              if (email === null) return;
+              email = email.trim();
+              if (!email) { alert("Пошта не може бути порожньою"); return; }
+              api("/api/classes/" + classId + "/students/" + btn.dataset.id, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim(), email: email }) })
+                .then(loadClass)
+                .catch(function (e) { alert(e.message || "Помилка"); });
+            });
+          });
+          document.querySelectorAll(".btn-remove").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+              if (!confirm("Видалити учня з класу?")) return;
+              api("/api/classes/" + classId + "/students/" + btn.dataset.id, { method: "DELETE" }).then(loadClass).catch(alert);
+            });
+          });
+        }).catch(function () {});
+      }
+
+      document.getElementById("btn-add-student").addEventListener("click", function () {
+        var email = document.getElementById("new-student-email").value.trim();
+        var name = document.getElementById("new-student-name").value.trim();
+        var msg = document.getElementById("add-student-msg");
+        msg.textContent = "";
+        if (!email) { msg.textContent = "Введіть пошту"; return; }
+        api("/api/classes/" + classId + "/students", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: email, name: name }) })
+          .then(function () { msg.textContent = "Учня додано"; document.getElementById("new-student-email").value = ""; document.getElementById("new-student-name").value = ""; loadClass(); })
+          .catch(function (e) { msg.textContent = e.message || "Помилка"; });
+      });
+
+      document.getElementById("link-results").addEventListener("click", function (e) {
+        e.preventDefault();
+        var sec = document.getElementById("results-section");
+        sec.classList.toggle("hidden");
+        if (!sec.classList.contains("hidden")) loadResults();
+      });
+
+      var lastResults = [];
+      var resultsSort = { key: "created_at", dir: -1 };
+
+      function renderResultsRows(attempts) {
+        var tbody = document.getElementById("results-tbody");
+        tbody.innerHTML = "";
+        attempts.forEach(function (a) {
+          var tr = document.createElement("tr");
+          var date = (a.created_at || "").slice(0, 19).replace("T", " ");
+          tr.innerHTML = "<td>" + escapeHtml(a.student_name || "—") + "</td><td>" + escapeHtml(a.student_email) + "</td><td>" + date + "</td><td>" + a.score + "</td><td>" + a.percent + "%</td><td><a href=\"student.html?id=" + a.student_id + "&class=" + classId + "#attempt-" + a.id + "\">Деталі</a></td>";
+          tbody.appendChild(tr);
+        });
+      }
+
+      function loadResults() {
+        var q = "?from=" + (document.getElementById("filter-from").value || "") + "&to=" + (document.getElementById("filter-to").value || "") + "&minScore=" + (document.getElementById("filter-min-score").value || "") + "&maxScore=" + (document.getElementById("filter-max-score").value || "") + "&search=" + encodeURIComponent(document.getElementById("filter-search").value || "");
+        api("/api/classes/" + classId + "/results" + q).then(function (data) {
+          lastResults = data.attempts || [];
+          lastResults.sort(function (a, b) {
+            var va = a[resultsSort.key], vb = b[resultsSort.key];
+            if (resultsSort.key === "created_at") { va = va || ""; vb = vb || ""; return resultsSort.dir * (va.localeCompare(vb)); }
+            if (resultsSort.key === "score" || resultsSort.key === "percent") { va = Number(va); vb = Number(vb); return resultsSort.dir * (va - vb); }
+            va = String(va || ""); vb = String(vb || ""); return resultsSort.dir * va.localeCompare(vb);
+          });
+          renderResultsRows(lastResults);
+        }).catch(function () {});
+      }
+
+      document.querySelectorAll("#results-table th.sortable").forEach(function (th) {
+        th.addEventListener("click", function () {
+          var key = th.dataset.sort;
+          if (resultsSort.key === key) resultsSort.dir *= -1; else { resultsSort.key = key; resultsSort.dir = 1; }
+          lastResults.sort(function (a, b) {
+            var va = a[resultsSort.key], vb = b[resultsSort.key];
+            if (resultsSort.key === "created_at") { va = va || ""; vb = vb || ""; return resultsSort.dir * (va.localeCompare(vb)); }
+            if (resultsSort.key === "score" || resultsSort.key === "percent") { va = Number(va); vb = Number(vb); return resultsSort.dir * (va - vb); }
+            va = String(va || ""); vb = String(vb || ""); return resultsSort.dir * va.localeCompare(vb);
+          });
+          renderResultsRows(lastResults);
+        });
+      });
+
+      document.getElementById("btn-apply-filters").addEventListener("click", loadResults);
+
+      function escapeHtml(s) {
+        if (s == null) return "";
+        var d = document.createElement("div");
+        d.textContent = s;
+        return d.innerHTML;
+      }
+
+      loadClass();
+    })();
+  </script>
+</body>
+</html>

@@ -133,6 +133,11 @@ body {
   background: #e2e6ec;
 }
 
+/* Під час тесту верхня панель без кнопок (Вчитель/Адмін) */
+body.test-active .app-header .header-right {
+  display: none !important;
+}
+
 .info-icon {
   width: 22px;
   height: 22px;
@@ -197,6 +202,20 @@ body {
 
 .start-actions {
   margin-top: 24px;
+}
+
+.start-screen-link {
+  margin-top: 16px;
+}
+
+.link-teacher {
+  color: #2563eb;
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+
+.link-teacher:hover {
+  text-decoration: underline;
 }
 
 .test-meta {
@@ -545,6 +564,14 @@ body {
   margin: 0;
   font-size: 0.95rem;
   color: #2c3e50;
+  line-height: 1.45;
+}
+
+/* LaTeX у варіантах відповідей — компактний розмір для читабельності */
+.option-main-text mjx-container {
+  font-size: 0.88em !important;
+  display: inline !important;
+  vertical-align: middle;
 }
 
 .option-latex {
@@ -602,14 +629,14 @@ body {
   text-align: left;
   border-radius: 8px;
   border: 1px solid #d0d5dc;
-  padding: 8px 12px;
-  font-size: 0.875rem;
+  padding: 10px 12px;
+  font-size: 1.05rem;
   background: #fff;
   cursor: pointer;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 2px;
+  gap: 4px;
 }
 
 .matching-select-trigger:hover {
@@ -619,19 +646,71 @@ body {
 
 .matching-select-trigger-label {
   flex-shrink: 0;
+  font-size: 1.05rem;
+  font-weight: 500;
 }
 
+/* Обрана відповідь у кнопці — добре видно літеру й формулу */
 .matching-select-trigger-math {
-  display: inline;
-  font-size: 0.8em;
+  display: inline-flex;
+  align-items: center;
+  font-size: 1.05rem;
+  line-height: 1.4;
+  vertical-align: middle;
+  min-height: 1.4em;
+}
+.matching-select-trigger-math mjx-container {
+  font-size: 1.05rem !important;
+  display: inline-block !important;
+  vertical-align: middle;
   line-height: 1.35;
+}
+.matching-select-trigger-math mjx-container svg {
+  display: block;
+  max-height: 1.5em;
+  width: auto !important;
+  height: auto !important;
   vertical-align: middle;
 }
+.matching-select-trigger-math .mjx-chtml {
+  font-size: 1.05rem !important;
+}
 
-/* Зменшений масштаб формул MathJax у випадаючому списку */
-.matching-select-trigger-math .mjx-chtml,
+/* У випадаючому списку — читабельний розмір тексту й формул */
+.matching-select-dropdown .matching-select-option {
+  padding: 8px 12px;
+  min-height: 2.25em;
+  align-items: center;
+  font-size: 1rem;
+}
+.matching-select-option .matching-option-label {
+  font-size: 1rem;
+  flex-shrink: 0;
+  font-weight: 500;
+}
+.matching-option-math {
+  display: inline-flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  font-size: 1rem;
+}
+.matching-option-math mjx-container {
+  font-size: 0.95em !important;
+  display: inline-block !important;
+  vertical-align: middle;
+  line-height: 1.3;
+}
+.matching-option-math mjx-container svg {
+  display: block;
+  transform: scale(0.9);
+  transform-origin: 0 50%;
+  width: auto !important;
+  height: auto !important;
+  vertical-align: middle;
+}
 .matching-option-math .mjx-chtml {
-  font-size: 1em;
+  font-size: 0.95em !important;
 }
 
 .matching-select-dropdown {
@@ -674,13 +753,6 @@ body {
 
 .matching-option-label {
   flex-shrink: 0;
-}
-
-.matching-option-math {
-  display: inline;
-  font-size: 0.8em;
-  line-height: 1.35;
-  vertical-align: middle;
 }
 
 /* ----- Коротка відповідь ----- */
@@ -749,6 +821,21 @@ body {
   margin-top: 12px;
   margin-bottom: 0;
   font-size: 0.98rem;
+}
+
+.incorrect-section {
+  margin-top: 20px;
+  margin-bottom: 24px;
+  padding: 16px;
+  border: 1px solid #e8c8c8;
+  border-radius: 10px;
+  background: #fdf8f8;
+}
+
+.incorrect-section h3 {
+  margin: 0 0 12px 0;
+  font-size: 1.1rem;
+  color: #b91c1c;
 }
 
 .details-incorrect {

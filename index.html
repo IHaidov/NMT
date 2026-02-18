@@ -27,24 +27,46 @@
         </div>
       </div>
       <div class="header-right">
+        <a href="./teacher.html" class="info-link"><span class="info-icon">👤</span><span class="info-text">Вчитель</span></a>
+        <a href="./admin.html" class="info-link"><span class="info-icon">⚙</span><span class="info-text">Адмін</span></a>
       </div>
     </header>
 
     <main>
-      <!-- Стартовий екран -->
-      <section id="start-screen" class="card start-screen">
+      <!-- Екран введення OTP коду -->
+      <section id="otp-screen" class="card start-screen">
+        <h2>Код доступу до тесту</h2>
+        <p class="muted">
+          Введіть код, який надав вам вчитель, щоб продовжити.
+        </p>
+        <label class="field-label" for="otp-code">Код доступу (OTP)</label>
+        <input id="otp-code" type="text" class="text-input" placeholder="Наприклад: 123456" maxlength="8" autocomplete="one-time-code" inputmode="numeric" />
+        <p id="otp-error" class="input-error" aria-live="polite"></p>
+        <div class="start-actions">
+          <button id="otp-submit-btn" class="btn btn-primary">Продовжити</button>
+        </div>
+        <p class="start-screen-link" style="margin-top: 20px;">
+          <a href="./teacher.html" class="link-teacher">Увійти як вчитель</a> &nbsp;·&nbsp;
+          <a href="./admin.html" class="link-teacher">Увійти як адміністратор</a>
+        </p>
+      </section>
+
+      <!-- Стартовий екран (ПІБ, пошта, почати тест) -->
+      <section id="start-screen" class="card start-screen hidden">
         <h2>Почніть тренувальний варіант НМТ</h2>
         <p class="muted">
           Уведіть ваше <strong>прізвище, ім’я та по батькові</strong>, щоб розпочати тестування.
         </p>
         <label class="field-label" for="student-name">ПІБ учня</label>
         <input id="student-name" type="text" class="text-input" placeholder="Наприклад: Іваненко Марія Петрівна" />
+        <label class="field-label" for="student-email">Електронна пошта</label>
+        <input id="student-email" type="email" class="text-input" placeholder="example@school.ua" />
         <p id="name-error" class="input-error" aria-live="polite"></p>
         <div class="start-actions">
           <button id="start-btn" class="btn btn-primary">Почати тест</button>
         </div>
         <p class="test-meta">
-          22 завдання &bull; до 90 хвилин &bull; максимальний бал: 32
+          22 завдання &bull; до 60 хвилин &bull; максимальний бал: 32
         </p>
       </section>
 

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Учень — НМТ</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\(', '\\)'], ['$', '$']],
+        displayMath: [['\\[', '\\]'], ['$$', '$$']]
+      },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+  <style>
+    .student-header { margin-bottom: 20px; }
+    .student-header h2 { margin: 0 0 4px 0; }
+    .student-meta { color: #5f6b7a; font-size: 0.95rem; }
+    .attempt-card { margin-bottom: 20px; border: 1px solid #e8eaed; border-radius: 8px; overflow: hidden; }
+    .attempt-head { padding: 12px 16px; background: #f5f6f8; cursor: pointer; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .attempt-head:hover { background: #eef0f3; }
+    .attempt-body { padding: 16px; background: #fff; border-top: 1px solid #e8eaed; }
+    .attempt-body table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .attempt-body th, .attempt-body td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #eee; }
+    .attempt-body th { color: #5f6b7a; font-weight: 500; }
+    .attempt-body .col-question { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .attempt-body .col-question a { color: #2563eb; text-decoration: none; display: block; overflow: hidden; text-overflow: ellipsis; }
+    .attempt-body .col-question a:hover { text-decoration: underline; }
+    .correct { color: #0d9488; }
+    .incorrect { color: #dc2626; }
+    .answer-detail-block { margin: 16px 0; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; font-size: 0.9rem; }
+    .answer-detail-block h4 { margin: 0 0 8px 0; font-size: 0.95rem; }
+    .answer-detail-block .detail-question { margin-bottom: 10px; }
+    .answer-detail-block .detail-options { margin: 8px 0; }
+    .answer-detail-block .detail-option { margin: 4px 0; padding: 4px 0; }
+    .answer-detail-block .detail-option.correct-opt { color: #0d9488; font-weight: 500; }
+    .answer-detail-block .detail-option.user-opt { background: rgba(37, 99, 235, 0.08); }
+    .answer-detail-block .detail-option.user-opt.incorrect-opt { color: #dc2626; }
+    .answer-detail-block .detail-points { margin-top: 8px; font-weight: 500; color: #5f6b7a; }
+    .answer-detail-block .detail-image { margin: 10px 0; }
+    .answer-detail-block .detail-image img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #e2e8f0; }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="header-left">
+        <div class="header-text">
+          <h1>Профіль учня</h1>
+          <p class="header-subtitle">Історія проходжень тесту</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <a href="#" id="back-link" class="info-link"><span class="info-icon">←</span><span class="info-text">До класу</span></a>
+      </div>
+    </header>
+
+    <main>
+      <section class="card">
+        <div class="student-header">
+          <h2 id="student-name"></h2>
+          <p class="student-meta" id="student-email"></p>
+        </div>
+        <h3>Проходження тестів</h3>
+        <div id="attempts-list"></div>
+        <p id="no-attempts" class="muted hidden">Ще немає проходжень.</p>
+      </section>
+    </main>
+
+    <footer class="page-footer">
+      <p>Підготувала — Гайдова Віра Вікторівна · 2025 · <a href="https://github.com/IHaidov/NMT" target="_blank" rel="noopener">Репозиторій проєкту</a></p>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      var studentId = parseInt((location.search.match(/id=(\d+)/) || [])[1], 10);
+      if (!studentId) { location.href = "teacher.html"; return; }
+
+      function api(path, opts) {
+        return fetch(path, { credentials: "include", ...opts }).then(function (r) {
+          if (r.status === 401) { location.href = "teacher.html"; return Promise.reject(); }
+          return r.json().then(function (data) { if (!r.ok) throw new Error(data.error || "Помилка"); return data; });
+        });
+      }
+
+      api("/api/students/" + studentId + "/attempts").then(function (data) {
+        document.getElementById("student-name").textContent = data.student.name || "—";
+        document.getElementById("student-email").textContent = data.student.email || "";
+        var fromClass = (location.search.match(/class=(\d+)/) || [])[1];
+        if (fromClass) document.getElementById("back-link").href = "class.html?id=" + fromClass;
+        else document.getElementById("back-link").href = "teacher.html";
+
+        var list = document.getElementById("attempts-list");
+        var noAttempts = document.getElementById("no-attempts");
+        if (!data.attempts || data.attempts.length === 0) {
+          list.classList.add("hidden");
+          noAttempts.classList.remove("hidden");
+          return;
+        }
+        noAttempts.classList.add("hidden");
+        function typesetMathIn(el) {
+          if (!el) return;
+          var run = function () {
+            if (window.MathJax && window.MathJax.typesetPromise) {
+              return window.MathJax.typesetPromise([el]).catch(function () {});
+            }
+            return Promise.resolve();
+          };
+          if (window.MathJax && window.MathJax.startupPromise) {
+            window.MathJax.startupPromise.then(run).catch(function () {});
+          } else {
+            run();
+            setTimeout(function () { run(); }, 300);
+          }
+        }
+        data.attempts.forEach(function (a) {
+          var card = document.createElement("div");
+          card.className = "attempt-card";
+          card.id = "attempt-" + a.id;
+          var date = (a.created_at || "").slice(0, 19).replace("T", " ");
+          card.innerHTML = '<div class="attempt-head"><span><strong>' + date + '</strong> — ' + a.score + ' / 32 (' + a.percent + '%)</span><span class="muted">розгорнути</span></div><div class="attempt-body hidden"></div>';
+          var body = card.querySelector(".attempt-body");
+          var answers = [];
+          try { answers = JSON.parse(a.answers_json || "[]"); } catch (e) {}
+          var attemptId = a.id;
+          function formatUserAnswer(r) {
+            if (r.type === "matching" && r.userAnswer && typeof r.userAnswer === "object") {
+              return Object.entries(r.userAnswer).map(function (e) { return e[0] + "→" + e[1]; }).join("; ");
+            }
+            return r.userAnswer != null ? String(r.userAnswer) : "—";
+          }
+          function escapeAttr(s) {
+            if (s == null) return "";
+            return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+          }
+          var maxQuestionLen = 55;
+          var rows = answers.map(function (r) {
+            var cls = r.isCorrect ? "correct" : "incorrect";
+            var qText = (r.questionText || "").replace(/\s+/g, " ").trim();
+            var shortQ = qText.length > maxQuestionLen ? qText.slice(0, maxQuestionLen) + "…" : qText;
+            var points = r.points != null ? r.points : (r.isCorrect ? (r.type === "short" ? 2 : 1) : 0);
+            return "<tr><td>" + r.index + "</td><td class=\"col-question\"><a href=\"#detail-" + attemptId + "-" + r.index + "\" title=\"" + escapeAttr(qText) + "\">" + escapeHtml(shortQ) + "</a></td><td>" + points + "</td><td class=\"" + cls + "\">" + escapeHtml(formatUserAnswer(r)) + "</td><td class=\"" + cls + "\">" + (r.isCorrect ? "Так" : "Ні") + "</td></tr>";
+          }).join("");
+          body.innerHTML = "<table><thead><tr><th>№</th><th>Питання</th><th>Бали</th><th>Відповідь учня</th><th>Правильно</th></tr></thead><tbody>" + rows + "</tbody></table>";
+          var detailList = document.createElement("div");
+          detailList.className = "answer-details-list";
+          answers.forEach(function (r) {
+            var points = r.points != null ? r.points : (r.isCorrect ? (r.type === "short" ? 2 : 1) : 0);
+            var detail = document.createElement("div");
+            detail.className = "answer-detail-block math-content";
+            detail.id = "detail-" + attemptId + "-" + r.index;
+            var detailBody = "<h4>Завдання " + r.index + " &bull; " + points + " бал(и)</h4>";
+            detailBody += "<div class=\"detail-question\">" + escapeHtml(r.questionText || "") + "</div>";
+            if (r.image) {
+              var imgSrc = r.image;
+              if (imgSrc.indexOf("/") !== 0 && imgSrc.indexOf("http") !== 0) imgSrc = "/" + imgSrc;
+              detailBody += "<div class=\"detail-image\"><img src=\"" + escapeAttr(imgSrc) + "\" alt=\"Ілюстрація до завдання\" /></div>";
+            }
+            if (r.options && r.options.length > 0) {
+              detailBody += "<div class=\"detail-options\">";
+              if (r.type === "single") {
+                r.options.forEach(function (opt) {
+                  var isCorrectOpt = (r.correctAnswer || "").indexOf(opt.label + ")") === 0;
+                  var isUserOpt = r.userAnswer === opt.label;
+                  var cl = "detail-option";
+                  if (isCorrectOpt) cl += " correct-opt";
+                  if (isUserOpt) cl += " user-opt" + (!r.isCorrect ? " incorrect-opt" : "");
+                  var optContent = (opt.latex != null && opt.latex !== "") ? "\\(" + opt.latex + "\\)" : escapeHtml(opt.text || "");
+                  detailBody += "<div class=\"" + cl + "\"><strong>" + escapeHtml(opt.label) + ")</strong> <span class=\"math-content\">" + optContent + "</span></div>";
+                });
+              } else if (r.type === "matching") {
+                r.options.forEach(function (opt) {
+                  var userVal = (r.userAnswer && r.userAnswer[opt.key]) || "—";
+                  var correctVal = (r.correctAnswer || "").split(";").map(function (s) { var m = s.trim().match(/(.+)→(.+)/); return m ? { k: m[1], v: m[2] } : null; }).filter(Boolean).find(function (p) { return p.k === opt.key; });
+                  var correctV = correctVal ? correctVal.v : "—";
+                  var isRight = userVal === correctV;
+                  detailBody += "<div class=\"detail-option\">" + escapeHtml(opt.key) + " → <span class=\"" + (isRight ? "correct" : "incorrect") + "\">" + escapeHtml(userVal) + "</span>" + (!isRight ? " (правильно: " + escapeHtml(correctV) + ")" : "") + "</div>";
+                });
+              }
+              detailBody += "</div>";
+            }
+            var yourAnsContent = (r.yourLatex != null && r.yourLatex !== "") ? "\\(" + r.yourLatex + "\\)" : escapeHtml(formatUserAnswer(r));
+            var correctAnsContent = (r.correctLatex != null && r.correctLatex !== "") ? "\\(" + r.correctLatex + "\\)" : escapeHtml(r.correctAnswer || "—");
+            detailBody += "<p class=\"detail-answer-line\">Відповідь учня: <span class=\"" + (r.isCorrect ? "correct" : "incorrect") + "\"><span class=\"math-content\">" + yourAnsContent + "</span></span></p>";
+            detailBody += "<p class=\"detail-answer-line\">Правильна відповідь: <span class=\"math-content\">" + correctAnsContent + "</span></p>";
+            detailBody += "<p class=\"detail-points\">Балів за завдання: " + points + "</p>";
+            detail.innerHTML = detailBody;
+            detailList.appendChild(detail);
+          });
+          body.appendChild(detailList);
+          card.querySelector(".attempt-head").addEventListener("click", function () {
+            body.classList.toggle("hidden");
+            card.querySelector(".attempt-head .muted").textContent = body.classList.contains("hidden") ? "розгорнути" : "згорнути";
+            if (!body.classList.contains("hidden")) typesetMathIn(body);
+          });
+          var hash = location.hash.slice(1);
+          if (hash === "attempt-" + a.id) {
+            body.classList.remove("hidden");
+            card.querySelector(".attempt-head .muted").textContent = "згорнути";
+            typesetMathIn(body);
+          }
+          list.appendChild(card);
+        });
+      }).catch(function () { location.href = "teacher.html"; });
+
+      function escapeHtml(s) {
+        if (s == null) return "";
+        var d = document.createElement("div");
+        d.textContent = s;
+        return d.innerHTML;
+      }
+    })();
+  </script>
+</body>
+</html>

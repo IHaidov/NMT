@@ -16,9 +16,14 @@ let timerInterval = null;
 let endTime = null;
 
 // Елементи DOM
+const otpScreen = document.getElementById("otp-screen");
 const startScreen = document.getElementById("start-screen");
 const testScreen = document.getElementById("test-screen");
+const otpCodeInput = document.getElementById("otp-code");
+const otpErrorEl = document.getElementById("otp-error");
+const otpSubmitBtn = document.getElementById("otp-submit-btn");
 const nameInput = document.getElementById("student-name");
+const emailInput = document.getElementById("student-email");
 const nameError = document.getElementById("name-error");
 const startBtn = document.getElementById("start-btn");
 const studentNameDisplay = document.getElementById("student-name-display");
@@ -376,6 +381,10 @@ function renderMatching(qObj) {
         if (!open) {
           wrap.classList.add("matching-select-open");
           dropdown.hidden = false;
+          if (!dropdown.dataset.typeset && window.MathJax && window.MathJax.typesetPromise) {
+            dropdown.dataset.typeset = "1";
+            window.MathJax.typesetPromise([dropdown]).catch(() => {});
+          }
         }
       });
 
@@ -404,7 +413,7 @@ function renderMatching(qObj) {
 
       rightTd.appendChild(wrap);
       if (window.MathJax && window.MathJax.typesetPromise) {
-        window.MathJax.typesetPromise([wrap]).catch(() => {});
+        window.MathJax.typesetPromise([trigger]).catch(() => {});
       }
     } else {
       const select = document.createElement("select");
@@ -546,6 +555,21 @@ function normalizeNumber(str) {
   return Number.isFinite(num) ? num : null;
 }
 
+/** Повертає масив пар { key, label } для matching: підтримує answer як масив або об'єкт (1→Д, 2→Г). */
+function getMatchingAnswerPairs(q) {
+  const a = q.answer;
+  if (!a) return [];
+  if (Array.isArray(a)) {
+    return a
+      .map((p) => ({ key: p.statement || p.expression || p.segment || p.label, label: p.label }))
+      .filter((p) => p.key);
+  }
+  if (typeof a === "object") {
+    return Object.entries(a).map(([key, label]) => ({ key: String(key), label: String(label) }));
+  }
+  return [];
+}
+
 function evaluateTest() {
   let score = 0;
   const incorrect = [];
@@ -565,15 +589,13 @@ function evaluateTest() {
       }
     } else if (qObj.type === "matching") {
       // 0–3 бали: за кожну правильно встановлену пару +1
-      const answers = q.answer || [];
-      qMax = answers.length;
+      const pairs = getMatchingAnswerPairs(q);
+      qMax = pairs.length;
       let localScore = 0;
 
-      answers.forEach((pair) => {
-        const key = pair.statement || pair.expression || pair.segment || pair.label;
-        if (!key) return;
+      pairs.forEach((pair) => {
         const expected = pair.label;
-        const actual = qObj.userAnswer ? qObj.userAnswer[key] : null;
+        const actual = qObj.userAnswer ? qObj.userAnswer[pair.key] : null;
         if (actual && actual === expected) {
           localScore += 1;
         }
@@ -627,11 +649,8 @@ function buildResultPayload(result, studentName) {
       const ans = (question.answer || [])[0];
       if (ans && ans.latex != null) correctLatex = ans.latex;
     } else if (type === "matching") {
-      const lines = (question.answer || []).map((pair) => {
-        const key = pair.statement || pair.expression || pair.segment || pair.label;
-        return key ? `${key} → ${pair.label}` : "";
-      });
-      correctText = lines.filter(Boolean).join("; ");
+      const pairs = getMatchingAnswerPairs(question);
+      correctText = pairs.map((p) => `${p.key} → ${p.label}`).join("; ");
     } else if (type === "short") {
       correctText = typeof question.answer === "string" ? question.answer : String(question.answer);
     }
@@ -665,14 +684,86 @@ function buildResultPayload(result, studentName) {
   };
 }
 
-function saveResultAndRedirect(result) {
+function buildFullAnswers(result) {
+  const answers = [];
+  testQuestions.forEach((qObj, idx) => {
+    const q = qObj.raw;
+    const type = qObj.type;
+    const userAnswer = qObj.userAnswer;
+    let correctAnswer = "";
+    let isCorrect = false;
+    let points = 0;
+    let options = [];
+    let yourLatex = "";
+    let correctLatex = "";
+
+    if (type === "single") {
+      const ans = (q.answer || [])[0];
+      correctAnswer = ans ? `${ans.label}) ${ans.text || ""}` : "";
+      isCorrect = ans && userAnswer === ans.label;
+      points = isCorrect ? 1 : 0;
+      options = (q.options || []).map((o) => ({ label: o.label, text: o.text || "", latex: o.latex != null ? o.latex : undefined }));
+      if (ans && ans.latex != null) correctLatex = ans.latex;
+      const chosen = (q.options || []).find((o) => o.label === userAnswer);
+      if (chosen && chosen.latex != null) yourLatex = chosen.latex;
+    } else if (type === "matching") {
+      const pairs = getMatchingAnswerPairs(q);
+      correctAnswer = pairs.map((p) => `${p.key}→${p.label}`).join("; ");
+      let cnt = 0;
+      pairs.forEach((p) => {
+        if (userAnswer && userAnswer[p.key] === p.label) cnt++;
+      });
+      points = cnt;
+      isCorrect = cnt === pairs.length;
+      options = pairs.map((p) => ({ key: p.key, label: p.label }));
+    } else if (type === "short") {
+      correctAnswer = typeof q.answer === "string" ? q.answer : String(q.answer);
+      const sn = normalizeNumber(userAnswer);
+      const cn = normalizeNumber(correctAnswer);
+      isCorrect = sn != null && cn != null && Math.abs(sn - cn) < 1e-6;
+      points = isCorrect ? 2 : 0;
+    }
+
+    answers.push({
+      index: idx + 1,
+      questionText: q.question || "",
+      questionLatex: q.latex != null ? q.latex : undefined,
+      image: q.image || undefined,
+      type,
+      points,
+      userAnswer: type === "matching" ? userAnswer : (userAnswer != null ? String(userAnswer) : ""),
+      correctAnswer,
+      isCorrect,
+      options,
+      yourLatex: yourLatex || undefined,
+      correctLatex: correctLatex || undefined,
+    });
+  });
+  return answers;
+}
+
+function saveResultAndRedirect(result, studentEmail) {
   const studentName = studentNameDisplay.textContent || "";
   const payload = buildResultPayload(result, studentName);
+  const fullAnswers = buildFullAnswers(result);
+  payload.answers = fullAnswers;
   try {
     sessionStorage.setItem(RESULT_STORAGE_KEY, JSON.stringify(payload));
   } catch (e) {
     console.warn("Не вдалося зберегти результат", e);
   }
+  fetch("/api/attempts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: studentEmail || "",
+      name: studentName,
+      score: result.score,
+      percent: result.percent,
+      answers: fullAnswers,
+      incorrect: payload.incorrect,
+    }),
+  }).catch(() => {});
   window.location.href = "results.html";
 }
 
@@ -686,29 +777,50 @@ function finishTest(auto = false) {
   }
 
   isFinished = true;
-  clearInterval(timerInterval);
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = null;
   clearTestState();
 
   // Блокуємо навігацію
-  prevBtn.disabled = true;
-  nextBtn.disabled = true;
-  flagBtn.disabled = true;
-  finishBtn.disabled = true;
-  questionGrid.querySelectorAll("button").forEach((btn) => (btn.disabled = true));
+  if (prevBtn) prevBtn.disabled = true;
+  if (nextBtn) nextBtn.disabled = true;
+  if (flagBtn) flagBtn.disabled = true;
+  if (finishBtn) finishBtn.disabled = true;
+  if (questionGrid) questionGrid.querySelectorAll("button").forEach((btn) => (btn.disabled = true));
 
-  const result = evaluateTest();
-  saveResultAndRedirect(result);
+  try {
+    const result = evaluateTest();
+    const studentEmail = typeof window.studentEmail === "string" ? window.studentEmail : "";
+    saveResultAndRedirect(result, studentEmail);
+  } catch (e) {
+    console.error("Помилка при завершенні тесту:", e);
+    try {
+      const fallback = { score: 0, percent: 0, incorrect: [] };
+      const name = studentNameDisplay ? studentNameDisplay.textContent : "";
+      const payload = buildResultPayload(fallback, name || "");
+      payload.answers = buildFullAnswers(fallback);
+      sessionStorage.setItem(RESULT_STORAGE_KEY, JSON.stringify(payload));
+    } catch (_) {}
+    window.location.href = "results.html";
+  }
 }
 
 // Обробники подій
 startBtn.addEventListener("click", async () => {
   const name = nameInput.value.trim();
+  const email = emailInput ? emailInput.value.trim() : "";
   if (!name) {
     nameError.textContent = "Будь ласка, введіть ваше ПІБ.";
     nameInput.focus();
     return;
   }
+  if (!email) {
+    nameError.textContent = "Будь ласка, введіть електронну пошту.";
+    if (emailInput) emailInput.focus();
+    return;
+  }
   nameError.textContent = "";
+  window.studentEmail = email;
 
   try {
     const res = await fetch("./db.json");
@@ -726,9 +838,11 @@ startBtn.addEventListener("click", async () => {
   prepareTestQuestions();
   renderQuestionGrid();
   studentNameDisplay.textContent = name;
+  if (emailInput) emailInput.disabled = true;
 
   startScreen.classList.add("hidden");
   testScreen.classList.remove("hidden");
+  document.body.classList.add("test-active");
 
   startTimer();
   currentIndex = 0;
@@ -748,10 +862,75 @@ nextBtn.addEventListener("click", () => {
 });
 
 flagBtn.addEventListener("click", toggleFlag);
-finishBtn.addEventListener("click", () => finishTest(false));
+if (finishBtn) finishBtn.addEventListener("click", () => finishTest(false));
+document.addEventListener("click", (e) => {
+  if (e.target && e.target.id === "finish-btn") finishTest(false);
+});
+
+// OTP: перевірка сесії та показ екрану старту або введення коду
+function showStartScreen() {
+  if (otpScreen) otpScreen.classList.add("hidden");
+  if (startScreen) startScreen.classList.remove("hidden");
+}
+
+function showOtpScreen() {
+  if (otpScreen) otpScreen.classList.remove("hidden");
+  if (startScreen) startScreen.classList.add("hidden");
+}
+
+(function initOtpGate() {
+  fetch("/api/otp/session", { credentials: "include" })
+    .then((r) => r.json())
+    .then((data) => {
+      if (data && data.valid) {
+        showStartScreen();
+        tryRestoreTest();
+      } else {
+        showOtpScreen();
+      }
+    })
+    .catch(() => showOtpScreen());
+
+  if (otpSubmitBtn && otpCodeInput) {
+    otpSubmitBtn.addEventListener("click", () => {
+      const code = otpCodeInput.value.trim();
+      if (otpErrorEl) otpErrorEl.textContent = "";
+      if (!code) {
+        if (otpErrorEl) otpErrorEl.textContent = "Введіть код доступу.";
+        return;
+      }
+      otpSubmitBtn.disabled = true;
+      fetch("/api/otp/validate", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data && data.valid) {
+            showStartScreen();
+            otpCodeInput.value = "";
+            tryRestoreTest();
+          } else {
+            if (otpErrorEl) otpErrorEl.textContent = (data && data.error) || "Невірний або прострочений код.";
+          }
+        })
+        .catch(() => {
+          if (otpErrorEl) otpErrorEl.textContent = "Помилка перевірки коду.";
+        })
+        .finally(() => {
+          otpSubmitBtn.disabled = false;
+        });
+    });
+    otpCodeInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") otpSubmitBtn.click();
+    });
+  }
+})();
 
 // Відновлення тесту після оновлення сторінки
-(function tryRestoreTest() {
+function tryRestoreTest() {
   const state = loadTestState();
   if (!state || state.isFinished || !Array.isArray(state.testQuestions) || state.testQuestions.length === 0) {
     return;
@@ -765,9 +944,10 @@ finishBtn.addEventListener("click", () => finishTest(false));
   studentNameDisplay.textContent = state.studentName || "";
   startScreen.classList.add("hidden");
   testScreen.classList.remove("hidden");
+  document.body.classList.add("test-active");
 
   renderQuestionGrid();
   renderQuestion(currentIndex);
   startTimer(true);
-})();
+}
 

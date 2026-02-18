@@ -5,6 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Результати тестування — НМТ з математики</title>
   <link rel="stylesheet" href="./styles.css" />
+  <style>
+    .result-answers-table-wrap { overflow-x: auto; margin: 12px 0; }
+    .result-answers-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    .result-answers-table th, .result-answers-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #e8eaed; }
+    .result-answers-table th { color: #5f6b7a; font-weight: 500; }
+    .result-answers-table .col-question { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .result-answers-table .col-question a { color: #2563eb; text-decoration: none; display: block; overflow: hidden; text-overflow: ellipsis; }
+    .result-answers-table .col-question a:hover { text-decoration: underline; }
+    .result-answers-table .correct { color: #0d9488; }
+    .result-answers-table .incorrect { color: #dc2626; }
+    .answer-detail-block { margin: 20px 0; padding: 16px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }
+    .answer-detail-block h4 { margin: 0 0 12px 0; font-size: 1rem; color: #1a1f2e; }
+    .answer-detail-block .detail-question { margin-bottom: 12px; font-size: 0.95rem; }
+    .answer-detail-block .detail-options { margin: 8px 0; }
+    .answer-detail-block .detail-option { margin: 4px 0; padding: 4px 0; }
+    .answer-detail-block .detail-option.correct-opt { color: #0d9488; font-weight: 500; }
+    .answer-detail-block .detail-option.user-opt { background: rgba(37, 99, 235, 0.08); }
+    .answer-detail-block .detail-option.user-opt.incorrect-opt { color: #dc2626; }
+    .answer-detail-block .detail-points { margin-top: 12px; font-weight: 500; color: #5f6b7a; }
+    .answer-detail-block .detail-image { margin: 12px 0; }
+    .answer-detail-block .detail-image img { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #e2e8f0; }
+  </style>
   <script>
     window.MathJax = {
       tex: {
@@ -46,10 +68,18 @@
             </p>
             <p id="score-comment" class="muted result-comment"></p>
           </div>
-          <details class="details-incorrect">
-            <summary>Показати завдання, у яких допущено помилки</summary>
-            <div id="incorrect-list" class="incorrect-list"></div>
-          </details>
+          <div id="answers-table-wrap" class="hidden">
+            <h3>Відповіді по завданнях</h3>
+            <div class="result-answers-table-wrap">
+              <table class="result-answers-table">
+                <thead>
+                  <tr><th>№</th><th>Питання</th><th>Бали</th><th>Відповідь учня</th><th>Правильно</th></tr>
+                </thead>
+                <tbody id="answers-tbody"></tbody>
+              </table>
+            </div>
+            <div id="answers-detail-list"></div>
+          </div>
         </div>
       </section>
     </main>
@@ -96,25 +126,102 @@
       document.getElementById("score-percent").textContent = String(data.percent);
       document.getElementById("score-comment").textContent = data.comment || "";
 
-      function answerHtml(label, text, latex) {
-        var content = (latex ? "\\(" + latex + "\\)" : escapeHtml(text || "—"));
-        return "<strong>" + escapeHtml(label) + "</strong> " + content;
+      function formatUserAnswer(a) {
+        if (a.type === "matching" && a.userAnswer && typeof a.userAnswer === "object") {
+          return Object.entries(a.userAnswer).map(function (e) { return e[0] + "→" + e[1]; }).join("; ");
+        }
+        return a.userAnswer != null ? String(a.userAnswer) : "—";
       }
-      var listEl = document.getElementById("incorrect-list");
-      (data.incorrect || []).forEach(function (item) {
-        var block = document.createElement("div");
-        block.className = "incorrect-item";
-        var q = item.questionText || "";
-        block.innerHTML =
-          "<div class=\"incorrect-title\">Завдання " + escapeHtml(String(item.index)) + "</div>" +
-          "<div class=\"incorrect-question math-content\">" + escapeHtml(q) + "</div>" +
-          "<p class=\"incorrect-answer-line math-content\">" + answerHtml("Ваша відповідь:", item.yourText, item.yourLatex) + "</p>" +
-          "<p class=\"incorrect-answer-line math-content\">" + answerHtml("Правильна відповідь:", item.correctText, item.correctLatex) + "</p>";
-        listEl.appendChild(block);
-      });
+      function escapeAttr(s) {
+        if (s == null) return "";
+        return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      }
 
-      if (window.MathJax && window.MathJax.typesetPromise) {
-        window.MathJax.typesetPromise([resultBody]).then(function () {}).catch(function (err) { console.warn(err); });
+      var answers = data.answers || [];
+      if (!data.incorrect && answers.length > 0) {
+        data.incorrect = answers.filter(function (a) { return !a.isCorrect; }).map(function (a) {
+          return {
+            index: a.index,
+            questionText: a.questionText || "",
+            yourText: formatUserAnswer(a),
+            correctText: a.correctAnswer || "—",
+            yourLatex: a.yourLatex,
+            correctLatex: a.correctLatex
+          };
+        });
+      }
+      if (answers.length > 0) {
+        document.getElementById("answers-table-wrap").classList.remove("hidden");
+        var tbody = document.getElementById("answers-tbody");
+        var detailList = document.getElementById("answers-detail-list");
+        var maxQuestionLen = 60;
+        answers.forEach(function (a) {
+          var qText = (a.questionText || "").replace(/\s+/g, " ").trim();
+          var shortQ = qText.length > maxQuestionLen ? qText.slice(0, maxQuestionLen) + "…" : qText;
+          var cls = a.isCorrect ? "correct" : "incorrect";
+          var tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td>" + a.index + "</td>" +
+            "<td class=\"col-question\"><a href=\"#detail-" + a.index + "\" title=\"" + escapeAttr(qText) + "\">" + escapeHtml(shortQ) + "</a></td>" +
+            "<td>" + a.points + "</td>" +
+            "<td class=\"" + cls + "\">" + escapeHtml(formatUserAnswer(a)) + "</td>" +
+            "<td class=\"" + cls + "\">" + (a.isCorrect ? "Так" : "Ні") + "</td>";
+          tbody.appendChild(tr);
+
+          var detail = document.createElement("div");
+          detail.className = "answer-detail-block math-content";
+          detail.id = "detail-" + a.index;
+          var detailBody = "<h4>Завдання " + a.index + " &bull; " + (a.points || 0) + " бал(и)</h4>";
+          detailBody += "<div class=\"detail-question\">" + escapeHtml(a.questionText || "") + "</div>";
+          if (a.image) {
+            var imgSrc = a.image;
+            if (imgSrc.indexOf("/") !== 0 && imgSrc.indexOf("http") !== 0) imgSrc = "/" + imgSrc;
+            detailBody += "<div class=\"detail-image\"><img src=\"" + escapeAttr(imgSrc) + "\" alt=\"Ілюстрація до завдання\" /></div>";
+          }
+          if (a.options && a.options.length > 0) {
+            detailBody += "<div class=\"detail-options\">";
+            if (a.type === "single") {
+              a.options.forEach(function (opt) {
+                var isCorrectOpt = (a.correctAnswer || "").indexOf(opt.label + ")") === 0;
+                var isUserOpt = a.userAnswer === opt.label;
+                var cl = "detail-option";
+                if (isCorrectOpt) cl += " correct-opt";
+                if (isUserOpt) cl += " user-opt" + (!a.isCorrect ? " incorrect-opt" : "");
+                var optContent = (opt.latex != null && opt.latex !== "") ? "\\(" + opt.latex + "\\)" : escapeHtml(opt.text || "");
+                detailBody += "<div class=\"" + cl + "\"><strong>" + escapeHtml(opt.label) + ")</strong> <span class=\"math-content\">" + optContent + "</span></div>";
+              });
+            } else if (a.type === "matching") {
+              a.options.forEach(function (opt) {
+                var userVal = (a.userAnswer && a.userAnswer[opt.key]) || "—";
+                var correctVal = (a.correctAnswer || "").split(";").map(function (s) { var m = s.trim().match(/(.+)→(.+)/); return m ? { k: m[1], v: m[2] } : null; }).filter(Boolean).find(function (p) { return p.k === opt.key; });
+                var correctV = correctVal ? correctVal.v : "—";
+                var isRight = userVal === correctV;
+                detailBody += "<div class=\"detail-option\">" + escapeHtml(opt.key) + " → <span class=\"" + (isRight ? "correct" : "incorrect") + "\">" + escapeHtml(userVal) + "</span>" + (!isRight ? " (правильно: " + escapeHtml(correctV) + ")" : "") + "</div>";
+              });
+            }
+            detailBody += "</div>";
+          }
+          var yourAnsContent = (a.yourLatex != null && a.yourLatex !== "") ? "\\(" + a.yourLatex + "\\)" : escapeHtml(formatUserAnswer(a));
+          var correctAnsContent = (a.correctLatex != null && a.correctLatex !== "") ? "\\(" + a.correctLatex + "\\)" : escapeHtml(a.correctAnswer || "—");
+          detailBody += "<p class=\"detail-answer-line\">Ваша відповідь: <span class=\"" + (a.isCorrect ? "correct" : "incorrect") + "\"><span class=\"math-content\">" + yourAnsContent + "</span></span></p>";
+          detailBody += "<p class=\"detail-answer-line\">Правильна відповідь: <span class=\"math-content\">" + correctAnsContent + "</span></p>";
+          detailBody += "<p class=\"detail-points\">Балів за завдання: " + (a.points || 0) + "</p>";
+          detail.innerHTML = detailBody;
+          detailList.appendChild(detail);
+        });
+      }
+
+      if (window.MathJax) {
+        var run = function () {
+          if (window.MathJax.typesetPromise) return window.MathJax.typesetPromise([resultBody]);
+          return Promise.resolve();
+        };
+        if (window.MathJax.startupPromise) {
+          window.MathJax.startupPromise.then(run).then(function () {}).catch(function (err) { console.warn(err); });
+        } else {
+          run().catch(function (err) { console.warn(err); });
+          setTimeout(function () { run().catch(function () {}); }, 300);
+        }
       }
     })();
   </script>
