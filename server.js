@@ -1,8 +1,66 @@
 const express = require("express");
 const path = require("path");
+const fs = require("fs");
 const cookieParser = require("cookie-parser");
 const bcrypt = require("bcryptjs");
+const multer = require("multer");
 const db = require("./db-init");
+
+const QUESTIONS_FILE = process.env.QUESTIONS_FILE || path.join(__dirname, "questions.json");
+const IMG_DIR = path.join(path.dirname(QUESTIONS_FILE), "img");
+
+function ensureImgDir() {
+  try {
+    if (!fs.existsSync(IMG_DIR)) fs.mkdirSync(IMG_DIR, { recursive: true });
+  } catch (e) {
+    console.warn("Помилка створення папки img:", e.message);
+  }
+}
+ensureImgDir();
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    ensureImgDir();
+    cb(null, IMG_DIR);
+  },
+  filename: function (req, file, cb) {
+    const ext = (path.extname(file.originalname) || "").toLowerCase();
+    const safeExt = [".png", ".jpg", ".jpeg", ".gif", ".webp"].includes(ext) ? ext : ".png";
+    const name = "img_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9) + safeExt;
+    cb(null, name);
+  },
+});
+const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } }); // 5 MB
+
+function readQuestions() {
+  try {
+    if (QUESTIONS_FILE && fs.existsSync(QUESTIONS_FILE)) {
+      return JSON.parse(fs.readFileSync(QUESTIONS_FILE, "utf8"));
+    }
+  } catch (e) {
+    console.warn("Помилка читання questions file:", e.message);
+  }
+  const fallback = path.join(__dirname, "db.json");
+  if (fs.existsSync(fallback)) {
+    return JSON.parse(fs.readFileSync(fallback, "utf8"));
+  }
+  return [];
+}
+
+function initQuestionsFile() {
+  if (!QUESTIONS_FILE) return;
+  try {
+    if (!fs.existsSync(QUESTIONS_FILE)) {
+      const defaultPath = path.join(__dirname, "db.json");
+      if (fs.existsSync(defaultPath)) {
+        fs.writeFileSync(QUESTIONS_FILE, fs.readFileSync(defaultPath));
+        console.log("Скопійовано db.json → " + QUESTIONS_FILE);
+      }
+    }
+  } catch (e) {
+    console.warn("Помилка ініціалізації questions file:", e.message);
+  }
+}
 
 const app = express();
 const PORT = 3000;
@@ -34,6 +92,7 @@ const STUDENT_ACCESS_MAX_AGE_MS = 2 * 60 * 60 * 1000; // 2 hours
 
 app.use(express.json({ limit: "2mb" }));
 app.use(cookieParser(SESSION_SECRET));
+app.use("/img", express.static(IMG_DIR));
 app.use(express.static(path.join(__dirname)));
 
 function getTeacherId(req) {
@@ -574,13 +633,270 @@ app.delete("/api/admin/students/:id", requireAdmin, (req, res) => {
   return res.json({ ok: true });
 });
 
+// ——— Питання (база завдань): читання та збереження (адмін)
+app.get("/api/questions", (req, res) => {
+  try {
+    const data = readQuestions();
+    return res.json(Array.isArray(data) ? data : data.questions || data.data || []);
+  } catch (e) {
+    return res.status(500).json({ error: "Помилка читання питань" });
+  }
+});
+
+app.get("/api/admin/questions/:id/history", requireAdmin, (req, res) => {
+  const qId = parseInt(req.params.id, 10);
+  const rows = db.prepare(`
+    SELECT r.id, r.question_id, r.question_snapshot_json, r.teacher_id, r.action, r.created_at,
+           t.name as teacher_name, t.email as teacher_email
+    FROM question_revision_history r
+    JOIN teachers t ON t.id = r.teacher_id
+    WHERE r.question_id = ?
+    ORDER BY r.created_at DESC
+    LIMIT 50
+  `).all(qId);
+  const history = rows.map((r) => ({
+    id: r.id,
+    question_id: r.question_id,
+    teacher_id: r.teacher_id,
+    teacher_name: r.teacher_name,
+    teacher_email: r.teacher_email,
+    action: r.action,
+    created_at: r.created_at,
+    snapshot: (() => {
+      try {
+        return JSON.parse(r.question_snapshot_json || "{}");
+      } catch (e) {
+        return {};
+      }
+    })(),
+  }));
+  return res.json({ history });
+});
+
+app.post("/api/admin/questions", requireAdmin, (req, res) => {
+  if (!QUESTIONS_FILE) {
+    return res.status(503).json({
+      error: "Збереження питань не налаштовано. Вкажіть змінну середовища QUESTIONS_FILE (наприклад /data/questions.json).",
+    });
+  }
+  const questions = req.body && req.body.questions;
+  if (!Array.isArray(questions)) {
+    return res.status(400).json({ error: "Потрібне поле questions (масив завдань)" });
+  }
+  try {
+    const adminId = getTeacherId(req);
+    const existing = readQuestions();
+    const oldList = Array.isArray(existing) ? existing : (existing.questions || existing.data || []);
+    const oldById = {};
+    oldList.forEach((q) => { if (q.id != null) oldById[q.id] = q; });
+    const insertRev = db.prepare(
+      "INSERT INTO question_revision_history (question_id, question_snapshot_json, teacher_id, action) VALUES (?, ?, ?, 'admin_edited')"
+    );
+    questions.forEach((newQ) => {
+      const qid = newQ.id != null ? newQ.id : 0;
+      const oldQ = oldById[qid];
+      if (oldQ && JSON.stringify(oldQ) !== JSON.stringify(newQ)) {
+        insertRev.run(qid, JSON.stringify(newQ), adminId);
+      }
+    });
+    fs.writeFileSync(QUESTIONS_FILE, JSON.stringify(questions, null, 2), "utf8");
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("Помилка збереження питань:", e);
+    return res.status(500).json({ error: "Помилка запису файлу: " + (e.message || "") });
+  }
+});
+
+function requireTeacher(req, res, next) {
+  const teacherId = getTeacherId(req);
+  if (!teacherId) return res.status(401).json({ error: "Не авторизовано" });
+  req.teacherId = teacherId;
+  next();
+}
+
+// Для не-адміна редактор показує порожній список (вчитель створює свої завдання і надсилає їх)
+app.get("/api/teacher/editor-draft", requireTeacher, (req, res) => {
+  const row = db.prepare("SELECT questions_json FROM teacher_editor_draft WHERE teacher_id = ?").get(req.teacherId);
+  if (!row) return res.json({ questions: [] });
+  try {
+    const questions = JSON.parse(row.questions_json || "[]");
+    return res.json({ questions: Array.isArray(questions) ? questions : [] });
+  } catch (e) {
+    return res.json({ questions: [] });
+  }
+});
+
+app.post("/api/teacher/editor-draft", requireTeacher, (req, res) => {
+  const questions = req.body && req.body.questions;
+  if (!Array.isArray(questions)) {
+    return res.status(400).json({ error: "Потрібне поле questions (масив)" });
+  }
+  try {
+    const json = JSON.stringify(questions);
+    db.prepare(
+      "INSERT INTO teacher_editor_draft (teacher_id, questions_json, updated_at) VALUES (?, ?, datetime('now')) ON CONFLICT(teacher_id) DO UPDATE SET questions_json = excluded.questions_json, updated_at = datetime('now')"
+    ).run(req.teacherId, json);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("Помилка збереження чернетки:", e);
+    return res.status(500).json({ error: "Помилка: " + (e.message || "") });
+  }
+});
+
+// Вчитель надсилає завдання на перевірку адміну
+app.post("/api/teacher/submit-questions", requireTeacher, (req, res) => {
+  const questions = req.body && req.body.questions;
+  if (!Array.isArray(questions)) {
+    return res.status(400).json({ error: "Потрібне поле questions (масив завдань)" });
+  }
+  try {
+    db.prepare(
+      "INSERT INTO question_submissions (teacher_id, questions_json, status) VALUES (?, ?, 'pending')"
+    ).run(req.teacherId, JSON.stringify(questions));
+    const id = db.prepare("SELECT last_insert_rowid() as id").get().id;
+    return res.json({ ok: true, submissionId: id });
+  } catch (e) {
+    console.error("Помилка збереження надсилання:", e);
+    return res.status(500).json({ error: "Помилка: " + (e.message || "") });
+  }
+});
+
+// Адмін: список надсилань (вчитель + його нові завдання)
+app.get("/api/admin/submissions", requireAdmin, (req, res) => {
+  const rows = db.prepare(`
+    SELECT s.id, s.teacher_id, s.questions_json, s.status, s.created_at, s.reviewed_at,
+           t.name as teacher_name, t.email as teacher_email
+    FROM question_submissions s
+    JOIN teachers t ON t.id = s.teacher_id
+    ORDER BY s.created_at DESC
+  `).all();
+  const submissions = rows.map((r) => {
+    let count = 0;
+    try {
+      const arr = JSON.parse(r.questions_json || "[]");
+      count = Array.isArray(arr) ? arr.length : 0;
+    } catch (e) {}
+    return {
+      id: r.id,
+      teacher_id: r.teacher_id,
+      teacher_name: r.teacher_name,
+      teacher_email: r.teacher_email,
+      questions_count: count,
+      status: r.status,
+      created_at: r.created_at,
+      reviewed_at: r.reviewed_at,
+    };
+  });
+  return res.json({ submissions });
+});
+
+app.get("/api/admin/submissions/:id", requireAdmin, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const row = db.prepare(`
+    SELECT s.id, s.teacher_id, s.questions_json, s.status, s.created_at,
+           t.name as teacher_name, t.email as teacher_email
+    FROM question_submissions s
+    JOIN teachers t ON t.id = s.teacher_id
+    WHERE s.id = ?
+  `).get(id);
+  if (!row) return res.status(404).json({ error: "Надсилання не знайдено" });
+  let questions = [];
+  try {
+    questions = JSON.parse(row.questions_json || "[]");
+    if (!Array.isArray(questions)) questions = [];
+  } catch (e) {}
+  return res.json({
+    submission: {
+      id: row.id,
+      teacher_id: row.teacher_id,
+      teacher_name: row.teacher_name,
+      teacher_email: row.teacher_email,
+      status: row.status,
+      created_at: row.created_at,
+    },
+    questions,
+  });
+});
+
+app.post("/api/admin/submissions/:id/approve", requireAdmin, (req, res) => {
+  if (!QUESTIONS_FILE) {
+    return res.status(503).json({ error: "Збереження питань не налаштовано (QUESTIONS_FILE)" });
+  }
+  const id = parseInt(req.params.id, 10);
+  const row = db.prepare("SELECT id, teacher_id, questions_json, status FROM question_submissions WHERE id = ?").get(id);
+  if (!row) return res.status(404).json({ error: "Надсилання не знайдено" });
+  if (row.status !== "pending") {
+    return res.status(400).json({ error: "Надсилання вже розглянуто" });
+  }
+  let submitted = [];
+  try {
+    submitted = JSON.parse(row.questions_json || "[]");
+    if (!Array.isArray(submitted)) submitted = [];
+  } catch (e) {
+    return res.status(400).json({ error: "Невірний формат даних надсилання" });
+  }
+  const adminId = getTeacherId(req);
+  const now = new Date().toISOString();
+  try {
+    const existing = readQuestions();
+    const base = Array.isArray(existing) ? existing : (existing.questions || existing.data || []);
+    const merged = base.concat(submitted);
+    fs.writeFileSync(QUESTIONS_FILE, JSON.stringify(merged, null, 2), "utf8");
+    const insertRev = db.prepare(
+      "INSERT INTO question_revision_history (question_id, question_snapshot_json, teacher_id, action) VALUES (?, ?, ?, 'submitted_approved')"
+    );
+    submitted.forEach((q) => {
+      const qid = q.id != null ? q.id : 0;
+      insertRev.run(qid, JSON.stringify(q), row.teacher_id);
+    });
+    db.prepare(
+      "UPDATE question_submissions SET status = 'approved', reviewed_at = ?, reviewed_by = ? WHERE id = ?"
+    ).run(now, adminId, id);
+    return res.json({ ok: true, added: submitted.length, total: merged.length });
+  } catch (e) {
+    console.error("Помилка прийняття надсилання:", e);
+    return res.status(500).json({ error: "Помилка запису: " + (e.message || "") });
+  }
+});
+
+app.post("/api/admin/submissions/:id/reject", requireAdmin, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const row = db.prepare("SELECT id, status FROM question_submissions WHERE id = ?").get(id);
+  if (!row) return res.status(404).json({ error: "Надсилання не знайдено" });
+  if (row.status !== "pending") {
+    return res.status(400).json({ error: "Надсилання вже розглянуто" });
+  }
+  const adminId = getTeacherId(req);
+  const now = new Date().toISOString();
+  db.prepare(
+    "UPDATE question_submissions SET status = 'rejected', reviewed_at = ?, reviewed_by = ? WHERE id = ?"
+  ).run(now, adminId, id);
+  return res.json({ ok: true });
+});
+
+app.post("/api/admin/upload-image", requireAdmin, upload.single("image"), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "Файл не вибрано" });
+  const relativePath = "img/" + req.file.filename;
+  return res.json({ path: relativePath });
+});
+
+app.post("/api/teacher/upload-image", requireTeacher, upload.single("image"), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "Файл не вибрано" });
+  const relativePath = "img/" + req.file.filename;
+  return res.json({ path: relativePath });
+});
+
 // SPA fallback: teacher / admin pages
 app.get("/teacher*", (req, res) => res.sendFile(path.join(__dirname, "teacher.html")));
+app.get("/teacher-editor*", (req, res) => res.sendFile(path.join(__dirname, "teacher-editor.html")));
 app.get("/admin*", (req, res) => res.sendFile(path.join(__dirname, "admin.html")));
 app.get("/class/:id*", (req, res) => res.sendFile(path.join(__dirname, "class.html")));
 app.get("/student/:id*", (req, res) => res.sendFile(path.join(__dirname, "student.html")));
 
+initQuestionsFile();
+
 app.listen(PORT, () => {
   console.log(`Сервер: http://localhost:${PORT}`);
   console.log("Тест: головна сторінка. Вчитель: кнопка «Увійти як вчитель». Результати зберігаються в БД.");
+  if (QUESTIONS_FILE) console.log("Питання: збереження у " + QUESTIONS_FILE);
 });

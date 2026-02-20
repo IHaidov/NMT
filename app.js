@@ -934,11 +934,13 @@ startBtn.addEventListener("click", async () => {
   }
 
   try {
-    const res = await fetch("./db.json");
+    let res = await fetch("/api/questions").catch(() => null);
+    if (!res || !res.ok) res = await fetch("./db.json");
     if (!res.ok) {
       throw new Error("Не вдалося завантажити питання.");
     }
-    allQuestions = await res.json();
+    const data = await res.json();
+    allQuestions = Array.isArray(data) ? data : (data.questions || data.data || []);
   } catch (e) {
     console.error(e);
     nameError.textContent =

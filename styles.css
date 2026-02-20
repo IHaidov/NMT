@@ -557,14 +557,14 @@ body.test-active .app-header .header-right {
 
 .option-main-text {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 1.08rem;
   color: #2c3e50;
-  line-height: 1.45;
+  line-height: 1.5;
 }
 
-/* LaTeX у варіантах відповідей — компактний розмір для читабельності */
+/* LaTeX у варіантах відповідей */
 .option-main-text mjx-container {
-  font-size: 0.88em !important;
+  font-size: 0.95em !important;
   display: inline !important;
   vertical-align: middle;
 }
@@ -587,7 +587,7 @@ body.test-active .app-header .header-right {
   padding: 10px 12px;
   border-bottom: 1px solid #e8eaed;
   vertical-align: top;
-  font-size: 0.92rem;
+  font-size: 1.05rem;
 }
 
 .matching-table th {
@@ -607,8 +607,8 @@ body.test-active .app-header .header-right {
   margin-top: 6px;
   border-radius: 6px;
   border: 1px solid #d0d5dc;
-  padding: 6px 10px;
-  font-size: 0.9rem;
+  padding: 8px 10px;
+  font-size: 1.02rem;
   background: #fff;
 }
 
@@ -625,7 +625,7 @@ body.test-active .app-header .header-right {
   border-radius: 8px;
   border: 1px solid #d0d5dc;
   padding: 10px 12px;
-  font-size: 1.05rem;
+  font-size: 1.12rem;
   background: #fff;
   cursor: pointer;
   display: flex;
@@ -641,21 +641,21 @@ body.test-active .app-header .header-right {
 
 .matching-select-trigger-label {
   flex-shrink: 0;
-  font-size: 1.05rem;
+  font-size: 1.12rem;
   font-weight: 500;
 }
 
-/* Обрана відповідь у кнопці — добре видно літеру й формулу */
+/* Обрана відповідь у кнопці */
 .matching-select-trigger-math {
   display: inline-flex;
   align-items: center;
-  font-size: 1.05rem;
+  font-size: 1.12rem;
   line-height: 1.4;
   vertical-align: middle;
   min-height: 1.4em;
 }
 .matching-select-trigger-math mjx-container {
-  font-size: 1.05rem !important;
+  font-size: 1.12rem !important;
   display: inline-block !important;
   vertical-align: middle;
   line-height: 1.35;
@@ -668,18 +668,18 @@ body.test-active .app-header .header-right {
   vertical-align: middle;
 }
 .matching-select-trigger-math .mjx-chtml {
-  font-size: 1.05rem !important;
+  font-size: 1.12rem !important;
 }
 
-/* У випадаючому списку — читабельний розмір тексту й формул */
+/* У випадаючому списку відповідностей */
 .matching-select-dropdown .matching-select-option {
   padding: 8px 12px;
   min-height: 2.25em;
   align-items: center;
-  font-size: 1rem;
+  font-size: 1.05rem;
 }
 .matching-select-option .matching-option-label {
-  font-size: 1rem;
+  font-size: 1.05rem;
   flex-shrink: 0;
   font-weight: 500;
 }
@@ -688,10 +688,10 @@ body.test-active .app-header .header-right {
   align-items: center;
   flex: 1;
   min-width: 0;
-  font-size: 1rem;
+  font-size: 1.05rem;
 }
 .matching-option-math mjx-container {
-  font-size: 0.95em !important;
+  font-size: 1em !important;
   display: inline-block !important;
   vertical-align: middle;
   line-height: 1.3;

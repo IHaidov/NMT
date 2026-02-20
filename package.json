@@ -2,13 +2,12 @@
   "name": "nmt-math-trainer",
   "version": "1.0.0",
   "description": "Тренувальний варіант НМТ з математики",
-  "scripts": {
-    "start": "node server.js"
-  },
+  "scripts": { "start": "node server.js" },
   "dependencies": {
     "better-sqlite3": "^11.6.0",
     "cookie-parser": "^1.4.6",
     "express": "^4.21.0",
-    "bcryptjs": "^2.4.3"
+    "bcryptjs": "^2.4.3",
+    "multer": "^1.4.5-lts.1"
   }
 }

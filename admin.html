@@ -29,6 +29,20 @@
     .modal .field-label { display: block; margin-top: 10px; }
     .modal .text-input { width: 100%; margin-top: 4px; }
     .modal-actions { margin-top: 20px; display: flex; gap: 8px; }
+    .diff-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+    .diff-box { padding: 10px 12px; border-radius: 8px; font-size: 0.9rem; }
+    .diff-box.bulo { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+    .diff-box.stalo { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
+    .diff-box .diff-label { font-weight: 600; font-size: 0.75rem; text-transform: uppercase; margin-bottom: 6px; }
+    .preview-student { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-top: 8px; }
+    .preview-student .preview-title { font-size: 0.75rem; font-weight: 600; color: #64748b; margin-bottom: 8px; }
+    .submission-q-block { margin-bottom: 20px; padding: 14px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; }
+    .submission-q-block h4 { margin: 0 0 10px 0; font-size: 1rem; }
+    .history-list { list-style: none; padding: 0; margin: 0; }
+    .history-list li { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 0.9rem; }
+    .history-list li:last-child { border-bottom: none; }
+    .history-list .hist-date { color: #64748b; font-size: 0.8rem; }
+    .history-list .hist-teacher { font-weight: 500; }
   </style>
 </head>
 <body>
@@ -68,6 +82,7 @@
         <button type="button" class="admin-tab active" data-tab="teachers">Вчителі</button>
         <button type="button" class="admin-tab" data-tab="classes">Класи</button>
         <button type="button" class="admin-tab" data-tab="students">Учні</button>
+        <button type="button" class="admin-tab" data-tab="submissions" id="tab-submissions">Завдання на перевірку</button>
       </div>
       <div id="panel-teachers" class="admin-panel active card">
         <div style="overflow-x:auto;">
@@ -93,6 +108,14 @@
           </table>
         </div>
       </div>
+      <div id="panel-submissions" class="admin-panel card">
+        <div style="overflow-x:auto;">
+          <table class="data-table">
+            <thead><tr><th>Вчитель</th><th>Пошта</th><th>Завдань</th><th>Дата</th><th>Статус</th><th>Дії</th></tr></thead>
+            <tbody id="submissions-tbody"></tbody>
+          </table>
+        </div>
+      </div>
     </main>
   </div>
 
@@ -104,6 +127,24 @@
         <button type="button" id="modal-save" class="btn btn-primary">Зберегти</button>
         <button type="button" id="modal-cancel" class="btn btn-secondary">Скасувати</button>
       </div>
+    </div>
+  </div>
+  <div id="submission-modal-overlay" class="modal-overlay">
+    <div class="modal submission-modal" style="max-width:920px; max-height:90vh; overflow:hidden; display:flex; flex-direction:column;">
+      <h3 id="submission-modal-title">Надсилання завдань</h3>
+      <div id="submission-modal-body" style="flex:1; overflow-y:auto; min-height:0;"></div>
+      <div class="modal-actions">
+        <button type="button" id="submission-approve" class="btn btn-primary">Прийняти в базу</button>
+        <button type="button" id="submission-reject" class="btn btn-secondary">Відхилити</button>
+        <button type="button" id="submission-close" class="btn btn-secondary">Закрити</button>
+      </div>
+    </div>
+  </div>
+  <div id="history-modal-overlay" class="modal-overlay">
+    <div class="modal" style="max-width:480px;">
+      <h3>Історія змін завдання</h3>
+      <div id="history-modal-body"></div>
+      <button type="button" id="history-modal-close" class="btn btn-secondary" style="margin-top:12px;">Закрити</button>
     </div>
   </div>
 
@@ -137,6 +178,21 @@
         loginScreen.classList.add("hidden");
         dashboard.classList.remove("hidden");
         loadTab(currentTab);
+        updateSubmissionsBadge();
+      }
+      function updateSubmissionsBadge() {
+        var tabEl = document.getElementById("tab-submissions");
+        if (!tabEl) return;
+        fetch("/api/admin/submissions", { credentials: "include" })
+          .then(function (r) {
+            if (!r.ok) return [];
+            return r.json().then(function (d) { return d.submissions || []; }, function () { return []; });
+          })
+          .then(function (list) {
+            var pending = list.filter(function (s) { return s.status === "pending"; }).length;
+            tabEl.textContent = pending > 0 ? "Завдання на перевірку (" + pending + ")" : "Завдання на перевірку";
+          })
+          .catch(function () {});
       }
 
       document.getElementById("btn-login").addEventListener("click", function () {
@@ -167,7 +223,8 @@
           document.querySelectorAll(".admin-panel").forEach(function (p) { p.classList.remove("active"); });
           tab.classList.add("active");
           document.getElementById("panel-" + currentTab).classList.add("active");
-          document.getElementById("dashboard-title").textContent = currentTab === "teachers" ? "Вчителі" : currentTab === "classes" ? "Класи" : "Учні";
+          var titles = { teachers: "Вчителі", classes: "Класи", students: "Учні", submissions: "Завдання на перевірку" };
+          document.getElementById("dashboard-title").textContent = titles[currentTab] || currentTab;
           loadTab(currentTab);
         });
       });
@@ -175,7 +232,36 @@
       document.getElementById("btn-add").addEventListener("click", function () {
         if (currentTab === "teachers") openTeacherModal(null);
         else if (currentTab === "classes") openClassModal(null);
-        else openStudentModal(null);
+        else if (currentTab === "students") openStudentModal(null);
+      });
+      var submissionModalId = null;
+      document.getElementById("submission-close").addEventListener("click", function () {
+        document.getElementById("submission-modal-overlay").classList.remove("show");
+      });
+      document.getElementById("submission-approve").addEventListener("click", function () {
+        if (!submissionModalId) return;
+        api("/api/admin/submissions/" + submissionModalId + "/approve", { method: "POST" })
+          .then(function (data) {
+            document.getElementById("submission-modal-overlay").classList.remove("show");
+            loadTab("submissions");
+            updateSubmissionsBadge();
+            alert("Додано завдань: " + (data.added || 0) + ". Всього в базі: " + (data.total || 0));
+          })
+          .catch(function (e) { alert(e.message); });
+      });
+      document.getElementById("submission-reject").addEventListener("click", function () {
+        if (!submissionModalId) return;
+        if (!confirm("Відхилити це надсилання? Завдання не потраплять у базу.")) return;
+        api("/api/admin/submissions/" + submissionModalId + "/reject", { method: "POST" })
+          .then(function () {
+            document.getElementById("submission-modal-overlay").classList.remove("show");
+            loadTab("submissions");
+            updateSubmissionsBadge();
+          })
+          .catch(function (e) { alert(e.message); });
+      });
+      document.getElementById("submission-modal-overlay").addEventListener("click", function (e) {
+        if (e.target === this) document.getElementById("submission-modal-overlay").classList.remove("show");
       });
 
       document.getElementById("modal-cancel").addEventListener("click", function () { overlay.classList.remove("show"); });
@@ -332,7 +418,132 @@
               });
             });
           }).catch(function () {});
+        } else if (tab === "submissions") {
+          api("/api/admin/submissions").then(function (data) {
+            var list = data.submissions || [];
+            updateSubmissionsBadge();
+            var tbody = document.getElementById("submissions-tbody");
+            var statusText = { pending: "Очікує", approved: "Прийнято", rejected: "Відхилено" };
+            tbody.innerHTML = list.map(function (s) {
+              var actions = "<button type=\"button\" class=\"btn btn-small btn-view-submission\" data-id=\"" + s.id + "\">Переглянути</button>";
+              if (s.status === "pending") {
+                actions += " <button type=\"button\" class=\"btn btn-small btn-approve-submission\" data-id=\"" + s.id + "\">Прийняти</button>";
+                actions += " <button type=\"button\" class=\"btn btn-small btn-reject-submission\" data-id=\"" + s.id + "\">Відхилити</button>";
+              }
+              var created = (s.created_at || "").replace("T", " ").slice(0, 16);
+              return "<tr><td>" + escHtml(s.teacher_name) + "</td><td>" + escHtml(s.teacher_email) + "</td><td>" + s.questions_count + "</td><td>" + escHtml(created) + "</td><td>" + (statusText[s.status] || s.status) + "</td><td>" + actions + "</td></tr>";
+            }).join("");
+            tbody.querySelectorAll(".btn-view-submission").forEach(function (btn) {
+              btn.addEventListener("click", function () { openSubmissionModal(parseInt(btn.dataset.id, 10)); });
+            });
+            tbody.querySelectorAll(".btn-approve-submission").forEach(function (btn) {
+              btn.addEventListener("click", function () {
+                var id = parseInt(btn.dataset.id, 10);
+                api("/api/admin/submissions/" + id + "/approve", { method: "POST" })
+                  .then(function (data) { loadTab("submissions"); updateSubmissionsBadge(); alert("Додано: " + data.added + " завдань. Всього в базі: " + data.total); })
+                  .catch(function (e) { alert(e.message); });
+              });
+            });
+            tbody.querySelectorAll(".btn-reject-submission").forEach(function (btn) {
+              btn.addEventListener("click", function () {
+                if (!confirm("Відхилити це надсилання?")) return;
+                api("/api/admin/submissions/" + btn.dataset.id + "/reject", { method: "POST" })
+                  .then(function () { loadTab("submissions"); updateSubmissionsBadge(); })
+                  .catch(function (e) { alert(e.message); });
+              });
+            });
+          }).catch(function (e) {
+            document.getElementById("submissions-tbody").innerHTML = "<tr><td colspan=\"6\" style=\"color:#dc2626;\">Не вдалося завантажити надсилання: " + (e && e.message ? e.message : "помилка мережі") + "</td></tr>";
+          });
         }
+      }
+
+      function qTypeLabel(q) {
+        if (q.type === "matching" || (q.pairs && q.pairs.length) || (q.options && q.endings)) return "Відповідність";
+        if (q.type === "short" || (q.shortAnswer !== undefined) || (typeof (q.answer) === "string" && !Array.isArray(q.answer))) return "Коротка відповідь";
+        return "Варіант";
+      }
+      function questionSummary(q) {
+        var t = (q.topic || "").trim();
+        var text = (q.question || "").replace(/<[^>]+>/g, "").trim().slice(0, 200);
+        var type = qTypeLabel(q);
+        var ans = "";
+        if (type === "Коротка відповідь") ans = typeof q.answer === "string" ? q.answer : (q.answer != null ? String(q.answer) : "—");
+        else if (type === "Варіант" && q.answer && q.answer[0]) ans = q.answer[0].label || q.answer[0].statement || "—";
+        else if (type === "Відповідність" && q.answer) ans = typeof q.answer === "object" && !Array.isArray(q.answer) ? Object.keys(q.answer).length + " пар" : (Array.isArray(q.answer) ? q.answer.length + " пар" : "—");
+        return (t ? "Тема: " + t + ". " : "") + "Текст: " + (text || "—") + (text.length >= 200 ? "…" : "") + ". Тип: " + type + ". Відповідь: " + ans;
+      }
+      function questionPreviewHtml(q) {
+        var text = (q.question || "").replace(/<[^>]+>/g, " ").trim().slice(0, 300);
+        var type = qTypeLabel(q);
+        return "<div class=\"preview-student\"><div class=\"preview-title\">Як це бачить учень</div><div><strong>" + escHtml(q.topic || "—") + "</strong></div><p style=\"margin:8px 0 0 0;\">" + escHtml(text) + (text.length >= 300 ? "…" : "") + "</p><p style=\"margin:6px 0 0 0;font-size:0.85rem;color:#64748b;\">Тип: " + escHtml(type) + "</p></div>";
+      }
+      function openQuestionHistory(questionId) {
+        if (questionId == null) return;
+        document.getElementById("history-modal-body").innerHTML = "<p>Завантаження…</p>";
+        document.getElementById("history-modal-overlay").classList.add("show");
+        api("/api/admin/questions/" + questionId + "/history").then(function (data) {
+          var list = data.history || [];
+          if (!list.length) {
+            document.getElementById("history-modal-body").innerHTML = "<p class=\"muted\">Історія змін поки відсутня.</p>";
+            return;
+          }
+          var html = "<ul class=\"history-list\">";
+          list.forEach(function (h) {
+            var date = (h.created_at || "").replace("T", " ").slice(0, 19);
+            var action = h.action === "submitted_approved" ? "Надсилання прийнято" : h.action === "admin_edited" ? "Редагування адміном" : h.action;
+            html += "<li><span class=\"hist-date\">" + escHtml(date) + "</span><br><span class=\"hist-teacher\">" + escHtml(h.teacher_name || h.teacher_email || "—") + "</span> · " + escHtml(action) + "</li>";
+          });
+          html += "</ul>";
+          document.getElementById("history-modal-body").innerHTML = html;
+        }).catch(function (e) {
+          document.getElementById("history-modal-body").innerHTML = "<p style=\"color:#dc2626;\">" + escHtml(e.message || "Помилка завантаження") + "</p>";
+        });
+      }
+      document.getElementById("history-modal-close").addEventListener("click", function () {
+        document.getElementById("history-modal-overlay").classList.remove("show");
+      });
+      document.getElementById("history-modal-overlay").addEventListener("click", function (e) {
+        if (e.target === this) document.getElementById("history-modal-overlay").classList.remove("show");
+      });
+      function openSubmissionModal(id) {
+        submissionModalId = id;
+        Promise.all([
+          api("/api/admin/submissions/" + id),
+          fetch("/api/questions", { credentials: "include" }).then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; })
+        ]).then(function (results) {
+          var data = results[0];
+          var mainBank = Array.isArray(results[1]) ? results[1] : [];
+          var sub = data.submission;
+          var qList = data.questions || [];
+          var html = "<p><strong>" + escHtml(sub.teacher_name) + "</strong> (" + escHtml(sub.teacher_email) + "). Дата: " + escHtml((sub.created_at || "").replace("T", " ").slice(0, 16)) + ". Статус: " + (sub.status === "pending" ? "Очікує" : sub.status === "approved" ? "Прийнято" : "Відхилено") + ".</p>";
+          html += "<p><strong>Завдання (" + qList.length + "):</strong></p>";
+          html += "<div class=\"submission-questions-list\" style=\"max-height: none;\">";
+          qList.forEach(function (q, i) {
+            var oldQ = mainBank.find(function (x) { return x.id == q.id; });
+            var isEdit = !!oldQ;
+            html += "<div class=\"submission-q-block\">";
+            html += "<h4>Завдання #" + (i + 1) + (isEdit ? " — редагування (id " + q.id + ")" : " — нове завдання") + "</h4>";
+            if (isEdit) {
+              html += "<div class=\"diff-row\"><div class=\"diff-box bulo\"><div class=\"diff-label\">Було</div>" + escHtml(questionSummary(oldQ)) + "</div>";
+              html += "<div class=\"diff-box stalo\"><div class=\"diff-label\">Стало</div>" + escHtml(questionSummary(q)) + "</div></div>";
+            }
+            html += questionPreviewHtml(q);
+            if (q.id != null) {
+              html += "<p style=\"margin-top:10px;\"><button type=\"button\" class=\"btn btn-small btn-history\" data-qid=\"" + escAttr(String(q.id)) + "\">Історія змін</button></p>";
+            }
+            html += "</div>";
+          });
+          html += "</div>";
+          document.getElementById("submission-modal-title").textContent = "Надсилання завдань від " + (sub.teacher_name || "");
+          document.getElementById("submission-modal-body").innerHTML = html;
+          document.getElementById("submission-modal-body").querySelectorAll(".btn-history").forEach(function (btn) {
+            btn.addEventListener("click", function () { openQuestionHistory(parseInt(btn.dataset.qid, 10)); });
+          });
+          document.getElementById("submission-modal-overlay").classList.add("show");
+          document.getElementById("submission-approve").style.display = sub.status === "pending" ? "" : "none";
+          document.getElementById("submission-reject").style.display = sub.status === "pending" ? "" : "none";
+        }).catch(function (e) { alert(e.message); });
       }
 
       function escHtml(s) {

@@ -128,8 +128,10 @@
   var bankRoot = document.getElementById("bank-root");
   var loading = document.getElementById("loading");
 
-  fetch("./db.json")
-    .then(function (r) { if (!r.ok) throw new Error("Не вдалося завантажити питання"); return r.json(); })
+  fetch("/api/questions")
+    .then(function (r) { if (r && r.ok) return r.json(); return fetch("./db.json").then(function (r2) { if (!r2.ok) throw new Error("Не вдалося завантажити питання"); return r2.json(); }); })
+    .catch(function () { return fetch("./db.json").then(function (r) { if (!r.ok) throw new Error("Не вдалося завантажити питання"); return r.json(); }); })
+    .then(function (data) { return Array.isArray(data) ? data : (data.questions || data.data || []); })
     .then(function (questions) {
       loading.classList.add("hidden");
       bankRoot.classList.remove("hidden");

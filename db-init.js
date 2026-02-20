@@ -54,6 +54,34 @@ db.exec(`
     code TEXT NOT NULL,
     expires_at TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS question_submissions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    teacher_id INTEGER NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+    questions_json TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT DEFAULT (datetime('now')),
+    reviewed_at TEXT,
+    reviewed_by INTEGER REFERENCES teachers(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_submissions_teacher ON question_submissions(teacher_id);
+  CREATE INDEX IF NOT EXISTS idx_submissions_status ON question_submissions(status);
+
+  CREATE TABLE IF NOT EXISTS teacher_editor_draft (
+    teacher_id INTEGER PRIMARY KEY REFERENCES teachers(id) ON DELETE CASCADE,
+    questions_json TEXT NOT NULL DEFAULT '[]',
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS question_revision_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    question_id INTEGER NOT NULL,
+    question_snapshot_json TEXT NOT NULL,
+    teacher_id INTEGER NOT NULL REFERENCES teachers(id),
+    action TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_revision_question_id ON question_revision_history(question_id);
 `);
 
 // Migration: add new columns to teachers if table already existed

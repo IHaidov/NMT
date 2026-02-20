@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Редактор завдань — НМТ</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <style>
+    .editor-layout { display: grid; grid-template-columns: 280px 1fr; gap: 24px; align-items: start; transition: grid-template-columns 0.2s ease; }
+    .editor-layout.sidebar-collapsed { grid-template-columns: 52px 1fr; }
+    .editor-sidebar { background: #fff; border-radius: 12px; border: 1px solid #e8eaed; position: sticky; top: 20px; max-height: calc(100vh - 120px); overflow: hidden; display: flex; flex-direction: column; transition: width 0.2s ease; }
+    .editor-sidebar.collapsed { width: 52px; min-width: 52px; }
+    .editor-sidebar.collapsed .editor-sidebar-content { display: none; }
+    .editor-sidebar.collapsed .sidebar-toggle-btn { margin: 8px auto; }
+    .sidebar-toggle-wrap { flex-shrink: 0; padding: 8px 12px 0; }
+    .sidebar-toggle-btn { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; cursor: pointer; font-size: 0.9rem; color: #64748b; }
+    .sidebar-toggle-btn:hover { background: #e2e8f0; color: #1e293b; }
+    .sidebar-toggle-btn .sidebar-toggle-icon { flex-shrink: 0; width: 18px; height: 18px; }
+    .editor-sidebar.collapsed .sidebar-toggle-btn { width: 40px; min-width: 40px; padding: 8px; margin: 0 auto; }
+    .editor-sidebar.collapsed .sidebar-toggle-btn .sidebar-toggle-text { display: none; }
+    .editor-sidebar-content { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px 16px; }
+    .editor-sidebar h3 { margin: 12px 0 10px 0; font-size: 1rem; }
+    .editor-top-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #e8eaed; }
+    .editor-top-actions .copy-paste-row { display: flex; gap: 8px; margin: 0; }
+    .question-search { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 0.9rem; margin-bottom: 8px; box-sizing: border-box; }
+    .question-sort { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 0.85rem; margin-bottom: 10px; box-sizing: border-box; }
+    .editor-list { list-style: none; padding: 0; margin: 0; }
+    .editor-list li { margin-bottom: 6px; }
+    .editor-list a, .editor-list button.link-style { display: block; padding: 10px 12px; border-radius: 8px; text-align: left; background: #f8fafc; border: 1px solid #e2e8f0; color: #1a1f2e; text-decoration: none; font-size: 0.9rem; cursor: pointer; width: 100%; }
+    .editor-list a:hover, .editor-list button.link-style:hover { background: #e8eef7; border-color: #2563eb; }
+    .editor-list a.active { background: #dbeafe; border-color: #2563eb; font-weight: 500; }
+    .editor-list .q-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .editor-list .q-meta { font-size: 0.75rem; color: #5f6b7a; margin-top: 2px; }
+    .editor-main { min-width: 0; }
+    .editor-form .field { margin-bottom: 16px; }
+    .editor-form label { display: block; font-weight: 500; margin-bottom: 6px; color: #374151; font-size: 0.9rem; }
+    .editor-form input[type="text"], .editor-form input[type="number"], .editor-form textarea { width: 100%; max-width: 600px; padding: 10px 12px; border-radius: 8px; border: 1px solid #d0d5dc; font-size: 0.95rem; }
+    .editor-form textarea { min-height: 80px; resize: vertical; }
+    .editor-form .hint { font-size: 0.8rem; color: #5f6b7a; margin-top: 4px; }
+    .latex-helper { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; }
+    .latex-helper h4 { margin: 0 0 10px 0; font-size: 0.9rem; color: #0369a1; }
+    .latex-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+    .latex-btns button { padding: 6px 12px; border-radius: 6px; border: 1px solid #7dd3fc; background: #fff; cursor: pointer; font-size: 0.85rem; }
+    .latex-btns button:hover { background: #e0f2fe; }
+    .option-row, .pair-row, .kv-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+    .option-row input, .pair-row input, .kv-row input { flex: 1; min-width: 100px; }
+    .option-row .opt-label { width: 40px; }
+    .btn-remove { padding: 6px 10px; background: #fee2e2; border: 1px solid #fecaca; border-radius: 6px; cursor: pointer; color: #b91c1c; }
+    .btn-add { padding: 8px 14px; background: #dbeafe; border: 1px solid #93c5fd; border-radius: 8px; cursor: pointer; font-size: 0.9rem; margin-top: 8px; }
+    .type-panel { display: none; }
+    .type-panel.active { display: block; }
+    .editor-actions { margin-top: 24px; padding-top: 16px; border-top: 1px solid #e8eaed; display: flex; gap: 12px; flex-wrap: wrap; }
+    .save-status { font-size: 0.9rem; color: #5f6b7a; }
+    .save-status.error { color: #dc2626; }
+    .save-status.ok { color: #0d9488; }
+    .image-upload-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; max-width: 600px; }
+    .image-upload-row .image-path-input { flex: 1; min-width: 200px; }
+    .image-preview-wrap { margin-top: 12px; padding: 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; }
+    .image-preview-label { font-size: 0.9rem; font-weight: 500; color: #475569; margin-bottom: 8px; }
+    .image-preview-wrap img { display: block; max-width: 100%; width: auto; height: auto; max-height: 220px; border-radius: 8px; border: 1px solid #e2e8f0; }
+    .copy-paste-row { display: flex; gap: 8px; margin-bottom: 14px; }
+    .copy-paste-row .btn { flex: 1; }
+    .btn-editor-new { background: #059669; color: #fff; }
+    .btn-editor-new:hover { background: #047857; }
+    .btn-editor-copy { background: #d97706; color: #fff; border-color: #b45309; }
+    .btn-editor-copy:hover { background: #b45309; }
+    .btn-editor-paste { background: #7c3aed; color: #fff; border-color: #6d28d9; }
+    .btn-editor-paste:hover { background: #6d28d9; }
+    .btn-editor-preview { background: #0369a1; color: #fff; border-color: #0284c7; }
+    .btn-editor-preview:hover { background: #0284c7; }
+    .btn-editor-save { background: #2563eb; color: #fff; }
+    .btn-editor-save:hover { background: #1d4ed8; }
+    .btn-editor-delete { background: #dc2626; color: #fff; border-color: #b91c1c; }
+    .btn-editor-delete:hover { background: #b91c1c; }
+    .btn-editor-save-all { background: #0d9488; color: #fff; border-color: #0f766e; }
+    .btn-editor-save-all:hover { background: #0f766e; }
+    .btn-editor-submit { background: #059669; color: #fff; border-color: #047857; }
+    .btn-editor-submit:hover { background: #047857; }
+    .editor-form .panel-title { font-size: 1rem; margin: 16px 0 10px 0; color: #1a1f2e; padding-bottom: 6px; border-bottom: 1px solid #e8eaed; }
+    .editor-wiki { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; }
+    .editor-wiki summary { font-weight: 600; font-size: 1rem; color: #1e293b; cursor: pointer; list-style: none; }
+    .editor-wiki summary::-webkit-details-marker { display: none; }
+    .editor-wiki summary::before { content: "▸ "; }
+    .editor-wiki[open] summary::before { content: "▾ "; }
+    .editor-wiki .wiki-grid { display: grid; gap: 10px 16px; margin-top: 14px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+    .editor-wiki .wiki-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: #fff; border-radius: 8px; border: 1px solid #e2e8f0; }
+    .editor-wiki .wiki-badge { flex-shrink: 0; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; white-space: nowrap; }
+    .editor-wiki .wiki-badge--create { background: #d1fae5; color: #065f46; }
+    .editor-wiki .wiki-badge--copy { background: #fef3c7; color: #92400e; }
+    .editor-wiki .wiki-badge--list { background: #e0e7ff; color: #3730a3; }
+    .editor-wiki .wiki-badge--field { background: #dbeafe; color: #1e40af; }
+    .editor-wiki .wiki-badge--action { background: #fce7f3; color: #9d174d; }
+    .editor-wiki .wiki-desc { font-size: 0.85rem; color: #475569; line-height: 1.45; }
+    #editor-auth-required { text-align: center; padding: 40px 20px; color: #5f6b7a; }
+    #editor-auth-required a { color: #2563eb; }
+    .preview-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 24px; box-sizing: border-box; }
+    .preview-overlay.hidden { display: none; }
+    .preview-modal { background: #fff; border-radius: 12px; max-width: 640px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+    .preview-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #e8eaed; }
+    .preview-modal-header h3 { margin: 0; font-size: 1.1rem; color: #1a1f2e; }
+    .preview-modal-body { padding: 20px; }
+    .preview-modal-body .matching-table .correct-cell { background: #ecfdf5; }
+  </style>
+  <script>
+    window.MathJax = { tex: { inlineMath: [['\\(', '\\)'], ['$', '$']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="header-left">
+        <div class="header-text">
+          <h1>Редактор завдань</h1>
+          <p class="header-subtitle">Створення та редагування питань тесту (один варіант, відповідність, коротка відповідь)</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <a href="./teacher-questions.html" class="info-link">База питань</a>
+        <a href="./teacher.html" class="info-link">← Кабінет вчителя</a>
+      </div>
+    </header>
+
+    <main>
+      <div id="editor-auth-required" class="hidden">
+        <p>Для редагування завдань потрібно увійти в кабінет вчителя.</p>
+        <p><a href="./teacher.html">Увійти</a></p>
+      </div>
+
+      <div id="editor-root" class="editor-layout hidden">
+        <aside class="editor-sidebar" id="editor-sidebar">
+          <div class="sidebar-toggle-wrap">
+            <button type="button" class="sidebar-toggle-btn" id="sidebar-toggle-btn" title="Згорнути / розгорнути список завдань" aria-label="Список завдань">
+              <span class="sidebar-toggle-icon" id="sidebar-toggle-icon" aria-hidden="true"></span>
+              <span class="sidebar-toggle-text" id="sidebar-toggle-text">Список</span>
+            </button>
+          </div>
+          <div class="editor-sidebar-content">
+            <h3>Завдання</h3>
+            <input type="text" class="question-search" id="question-search" placeholder="Пошук за текстом або темою" />
+            <select class="question-sort" id="question-sort">
+              <option value="id">За номером (id)</option>
+              <option value="topic">За темою</option>
+              <option value="type">За типом</option>
+            </select>
+            <ul class="editor-list" id="question-list"></ul>
+          </div>
+        </aside>
+        <div class="editor-main">
+          <div class="editor-top-actions">
+            <button type="button" class="btn btn-editor-new" id="btn-new-question">+ Створити завдання</button>
+            <div class="copy-paste-row">
+              <button type="button" class="btn btn-editor-copy" id="btn-copy-question" title="Копіювати поточне завдання">Копіювати</button>
+              <button type="button" class="btn btn-editor-paste" id="btn-paste-question" title="Вставити як нове завдання">Вставити</button>
+            </div>
+          </div>
+          <details class="editor-wiki">
+            <summary>Довідка: що за що відповідає в редакторі</summary>
+            <div class="wiki-grid">
+              <div class="wiki-item"><span class="wiki-badge wiki-badge--create">Створити завдання</span><span class="wiki-desc">Додає нове порожнє завдання. Потім заповніть тему, текст і варіанти.</span></div>
+              <div class="wiki-item"><span class="wiki-badge wiki-badge--copy">Копіювати</span><span class="wiki-desc">Зберігає поточне завдання у буфер.</span></div>
+              <div class="wiki-item"><span class="wiki-badge wiki-badge--copy">Вставити</span><span class="wiki-desc">Додає копію як нове завдання (зручно для схожих завдань).</span></div>
+              <div class="wiki-item"><span class="wiki-badge wiki-badge--list">Список завдань</span><span class="wiki-desc">Усі завдання. Клік — відкрити. Зверху — пошук і сортування. Кнопка ◀ згортає список, щоб розширити редактор.</span></div>
+              <div class="wiki-item"><span class="wiki-badge wiki-badge--field">Тема</span><span class="wiki-desc">Назва теми, напр. «Числа і вирази».</span></div>
+              <div class="wiki-item"><span class="wiki-badge wiki-badge--field">Текст питання</span><span class="wiki-desc">Основний текст. Формули: <code>\( ... \)</code> або <code>$ ... $</code>. Кнопки LaTeX вставляють код.</span></div>
+              <div class="wiki-item"><span class="wiki-badge wiki-badge--field">LaTeX</span><span class="wiki-desc">Додаткова формула. Якщо не потрібно — порожньо.</span></div>
+              <div class="wiki-item"><span class="wiki-badge wiki-badge--field">Зображення</span><span class="wiki-desc">Шлях <code>img/…</code> або «Завантажити фото» — збережеться як img/img_xxx.png.</span></div>
+              <div class="wiki-item"><span class="wiki-badge wiki-badge--field">Тип завдання</span><span class="wiki-desc">Один варіант (А–Д), Відповідність (1–3 і А–Д) або Коротка відповідь (число).</span></div>
+              <div class="wiki-item"><span class="wiki-badge wiki-badge--field">Варіанти / пари</span><span class="wiki-desc">Варіанти відповіді та правильна літера; для відповідності — колонки і пари.</span></div>
+              <div class="wiki-item"><span class="wiki-badge wiki-badge--action">Переглянути для учня</span><span class="wiki-desc">Як завдання виглядатиме в тесті (без збереження).</span></div>
+              <div class="wiki-item"><span class="wiki-badge wiki-badge--action">Зберегти завдання</span><span class="wiki-desc">Зберігає зміни в списку (локально).</span></div>
+              <div class="wiki-item"><span class="wiki-badge wiki-badge--action">Видалити</span><span class="wiki-desc">Прибирає поточне завдання зі списку.</span></div>
+              <div class="wiki-item"><span class="wiki-badge wiki-badge--action">Зберегти базу на сервер</span><span class="wiki-desc">Відправляє всю базу. Тільки для адміністратора.</span></div>
+            </div>
+          </details>
+          <div class="latex-helper">
+            <h4>LaTeX — вставити формулу (поставте курсор у поле і натисніть)</h4>
+            <div class="latex-btns" id="latex-btns"></div>
+            <p class="hint" style="margin:10px 0 0 0;">У тексті питання формули оформлюйте так: <code>\( формула \)</code> або <code>$формула$</code>. У полях LaTeX — без дужок, наприклад <code>\frac{1}{2}</code>, <code>x^{2}</code>.</p>
+          </div>
+          <div class="card">
+            <div id="no-selection" class="muted">Оберіть завдання зі списку або створіть нове.</div>
+            <form id="question-form" class="editor-form hidden">
+              <input type="hidden" id="f-id" />
+              <div class="field">
+                <label>Тема</label>
+                <input type="text" id="f-topic" placeholder="Наприклад: Числа і вирази" />
+              </div>
+              <div class="field">
+                <label>Текст питання</label>
+                <textarea id="f-question" placeholder="Текст завдання. Формули: \( \frac{1}{2} \) або $x^2$"></textarea>
+                <p class="hint">Формули: дужки \( ... \) або $ ... $</p>
+              </div>
+              <div class="field">
+                <label>LaTeX (опційно)</label>
+                <textarea id="f-latex" placeholder="\\frac{1}{2}" style="min-height:50px;"></textarea>
+              </div>
+              <div class="field">
+                <label>Зображення до завдання</label>
+                <div class="image-upload-row">
+                  <input type="text" id="f-image" placeholder="img/img_70.png" class="image-path-input" />
+                  <label class="btn btn-secondary upload-btn">
+                    <input type="file" id="f-image-file" accept="image/*" hidden /> Завантажити фото
+                  </label>
+                </div>
+                <div id="image-preview-wrap" class="image-preview-wrap hidden">
+                  <div class="image-preview-label">Зображення в завданні:</div>
+                  <img id="image-preview" alt="Зображення завдання" />
+                </div>
+                <p class="hint">Файл збережеться як img/img_xxx.png</p>
+              </div>
+              <div class="field">
+                <label>Тип завдання</label>
+                <select id="f-type">
+                  <option value="single">Один варіант відповіді (А–Д)</option>
+                  <option value="matching">Відповідність (1–3 та А–Д)</option>
+                  <option value="short">Коротка відповідь (число)</option>
+                </select>
+              </div>
+
+              <div id="panel-single" class="type-panel">
+                <div class="panel-title">Варіанти відповіді (А, Б, В, Г, Д)</div>
+                <div id="single-options"></div>
+                <button type="button" class="btn-add" id="single-add-opt">+ Додати варіант</button>
+                <div class="field" style="margin-top:14px;">
+                  <label>Правильна відповідь</label>
+                  <input type="text" id="f-single-correct" placeholder="Літера (А–Д)" maxlength="2" style="max-width:80px;" />
+                </div>
+              </div>
+
+              <div id="panel-matching" class="type-panel">
+                <div class="panel-title">Ліва колонка «Початок» (наприклад 1, 2, 3)</div>
+                <div id="matching-left"></div>
+                <button type="button" class="btn-add" id="matching-add-left">+ Рядок</button>
+                <div class="panel-title">Права колонка «Закінчення» (А, Б, В, Г, Д)</div>
+                <div id="matching-right"></div>
+                <button type="button" class="btn-add" id="matching-add-right">+ Рядок</button>
+                <div class="panel-title">Правильні пари (хто з чим)</div>
+                <div id="matching-pairs"></div>
+                <button type="button" class="btn-add" id="matching-add-pair">+ Пара</button>
+              </div>
+
+              <div id="panel-short" class="type-panel">
+                <div class="field">
+                  <label>Правильна відповідь (число)</label>
+                  <input type="text" id="f-short-answer" placeholder="Наприклад: 7 або 0,8" />
+                  <p class="hint">Крапка або кома як десятковий роздільник.</p>
+                </div>
+              </div>
+
+              <div class="editor-actions">
+                <button type="button" class="btn btn-editor-preview" id="btn-preview">Переглянути для учня</button>
+                <button type="submit" class="btn btn-editor-save">Зберегти завдання</button>
+                <button type="button" class="btn btn-editor-delete" id="btn-delete-question">Видалити</button>
+                <span class="save-status" id="save-status"></span>
+              </div>
+            </form>
+          </div>
+          <div class="card editor-save-all-card" id="card-save-all" style="margin-top:16px;">
+            <h3>Зберегти всі зміни на сервер</h3>
+            <p class="muted">Відправляє поточний список усіх завдань на сервер.</p>
+            <button type="button" class="btn btn-editor-save-all" id="btn-save-all">Зберегти базу на сервер</button>
+            <span class="save-status" id="save-all-status"></span>
+          </div>
+          <div class="card editor-submit-card hidden" id="card-submit-review" style="margin-top:16px;">
+            <h3>Надіслати завдання на перевірку</h3>
+            <p class="muted">Адміністратор перегляне ваші завдання і додасть їх у загальну базу після схвалення. Надсилаються лише завдання, створені або збережені (відредаговані) у цій сесії.</p>
+            <button type="button" class="btn btn-editor-submit" id="btn-submit-review">Надіслати на перевірку</button>
+            <span class="save-status" id="submit-status"></span>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="page-footer">
+      <p>Підготувала — Гайдова Віра Вікторівна · 2026</p>
+    </footer>
+  </div>
+
+  <div id="preview-overlay" class="preview-overlay hidden" aria-hidden="true">
+    <div class="preview-modal">
+      <div class="preview-modal-header">
+        <h3>Як це виглядатиме для учня</h3>
+        <button type="button" class="btn btn-secondary" id="preview-close">Закрити</button>
+      </div>
+      <div class="preview-modal-body" id="preview-content"></div>
+    </div>
+  </div>
+
+  <script src="./teacher-editor.js"></script>
+</body>
+</html>
