@@ -8,6 +8,8 @@
   <style>
     .editor-layout { display: grid; grid-template-columns: 280px 1fr; gap: 24px; align-items: start; transition: grid-template-columns 0.2s ease; }
     .editor-layout.sidebar-collapsed { grid-template-columns: 52px 1fr; }
+    .editor-layout.table-view { grid-template-columns: 1fr; }
+    .editor-layout.table-view .editor-sidebar { display: none; }
     .editor-sidebar { background: #fff; border-radius: 12px; border: 1px solid #e8eaed; position: sticky; top: 20px; max-height: calc(100vh - 120px); overflow: hidden; display: flex; flex-direction: column; transition: width 0.2s ease; }
     .editor-sidebar.collapsed { width: 52px; min-width: 52px; }
     .editor-sidebar.collapsed .editor-sidebar-content { display: none; }
@@ -24,13 +26,26 @@
     .editor-top-actions .copy-paste-row { display: flex; gap: 8px; margin: 0; }
     .question-search { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 0.9rem; margin-bottom: 8px; box-sizing: border-box; }
     .question-sort { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 0.85rem; margin-bottom: 10px; box-sizing: border-box; }
-    .editor-list { list-style: none; padding: 0; margin: 0; }
-    .editor-list li { margin-bottom: 6px; }
-    .editor-list a, .editor-list button.link-style { display: block; padding: 10px 12px; border-radius: 8px; text-align: left; background: #f8fafc; border: 1px solid #e2e8f0; color: #1a1f2e; text-decoration: none; font-size: 0.9rem; cursor: pointer; width: 100%; }
+    .editor-list { list-style: none; padding: 0; margin: 0; min-width: 0; }
+    .editor-list li { margin-bottom: 6px; min-width: 0; }
+    .editor-list a, .editor-list button.link-style { display: block; padding: 10px 12px; border-radius: 8px; text-align: left; background: #f8fafc; border: 1px solid #e2e8f0; color: #1a1f2e; text-decoration: none; font-size: 0.9rem; cursor: pointer; width: 100%; min-width: 0; overflow: hidden; box-sizing: border-box; }
     .editor-list a:hover, .editor-list button.link-style:hover { background: #e8eef7; border-color: #2563eb; }
     .editor-list a.active { background: #dbeafe; border-color: #2563eb; font-weight: 500; }
-    .editor-list .q-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .editor-list .q-meta { font-size: 0.75rem; color: #5f6b7a; margin-top: 2px; }
+    .editor-list .q-preview { overflow: hidden; text-overflow: ellipsis; max-width: 100%; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
+    .editor-list .q-meta { font-size: 0.75rem; color: #5f6b7a; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .editor-tasks-table-wrap { overflow: auto; max-height: calc(100vh - 220px); }
+    .editor-tasks-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .editor-tasks-table th, .editor-tasks-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+    .editor-tasks-table th { background: #f1f5f9; font-weight: 600; color: #334155; position: sticky; top: 0; z-index: 1; }
+    .editor-tasks-table tbody tr { cursor: pointer; }
+    .editor-tasks-table tbody tr:hover { background: #e0e7ff; }
+    .editor-tasks-table tr.selected { background: #dbeafe; }
+    .editor-tasks-table .col-preview { max-width: 360px; min-width: 120px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.4; }
+    .editor-tasks-table .col-topic { max-width: 140px; min-width: 80px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.4; }
+    .editor-tasks-table .col-type { min-width: 100px; white-space: nowrap; font-weight: 500; color: #475569; }
+    .editor-tasks-table .tag-local { font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; background: #dbeafe; color: #1e40af; }
+    .editor-layout.table-view #tasks-table-full-wrap .editor-tasks-table-wrap { max-height: calc(100vh - 180px); }
+    #tasks-table-full-wrap .col-preview { max-width: 400px; }
     .editor-main { min-width: 0; }
     .editor-form .field { margin-bottom: 16px; }
     .editor-form label { display: block; font-weight: 500; margin-bottom: 6px; color: #374151; font-size: 0.9rem; }
@@ -77,11 +92,15 @@
     .btn-editor-submit { background: #059669; color: #fff; border-color: #047857; }
     .btn-editor-submit:hover { background: #047857; }
     .editor-form .panel-title { font-size: 1rem; margin: 16px 0 10px 0; color: #1a1f2e; padding-bottom: 6px; border-bottom: 1px solid #e8eaed; }
-    .editor-wiki { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; }
-    .editor-wiki summary { font-weight: 600; font-size: 1rem; color: #1e293b; cursor: pointer; list-style: none; }
+    .editor-wiki { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0; margin-bottom: 16px; }
+    .editor-wiki[open] { padding: 0; }
+    .editor-wiki[open] .editor-wiki-content { padding: 16px 20px; }
+    .editor-wiki summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; padding: 10px 14px; border: none; background: none; font-size: 0.9rem; color: #64748b; width: 100%; box-sizing: border-box; }
     .editor-wiki summary::-webkit-details-marker { display: none; }
-    .editor-wiki summary::before { content: "▸ "; }
-    .editor-wiki[open] summary::before { content: "▾ "; }
+    .editor-wiki summary::before { display: none; }
+    .editor-wiki summary:hover { background: #f1f5f9; color: #1e293b; border-radius: 10px; }
+    .editor-wiki-icon { display: inline-flex; align-items: center; justify-content: center; width: 1.35em; height: 1.35em; border-radius: 50%; border: 1.5px solid #64748b; color: #64748b; font-size: 0.8rem; font-weight: 700; font-style: normal; flex-shrink: 0; }
+    .editor-wiki summary:hover .editor-wiki-icon { border-color: #2563eb; color: #2563eb; }
     .editor-wiki .wiki-grid { display: grid; gap: 10px 16px; margin-top: 14px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
     .editor-wiki .wiki-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: #fff; border-radius: 8px; border: 1px solid #e2e8f0; }
     .editor-wiki .wiki-badge { flex-shrink: 0; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; white-space: nowrap; }
@@ -143,11 +162,27 @@
               <option value="topic">За темою</option>
               <option value="type">За типом</option>
             </select>
-            <ul class="editor-list" id="question-list"></ul>
+            <div id="tasks-list-container">
+              <ul class="editor-list" id="question-list"></ul>
+            </div>
           </div>
         </aside>
         <div class="editor-main">
+          <div id="tasks-table-full-wrap" class="hidden">
+            <div class="editor-table-top" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
+              <h3 style="margin:0;font-size:1.1rem;">Усі завдання</h3>
+              <button type="button" class="btn btn-editor-new" id="btn-new-question-table">+ Створити завдання</button>
+            </div>
+            <div class="editor-tasks-table-wrap">
+              <table class="editor-tasks-table" id="question-table">
+                <thead><tr><th>№</th><th>Тема</th><th>Питання</th><th>Тип</th><th></th></tr></thead>
+                <tbody id="question-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+          <div id="editor-content-wrap" class="hidden">
           <div class="editor-top-actions">
+            <button type="button" class="btn btn-secondary" id="btn-back-to-table" style="margin-right:auto;">← До таблиці</button>
             <button type="button" class="btn btn-editor-new" id="btn-new-question">+ Створити завдання</button>
             <div class="copy-paste-row">
               <button type="button" class="btn btn-editor-copy" id="btn-copy-question" title="Копіювати поточне завдання">Копіювати</button>
@@ -155,12 +190,12 @@
             </div>
           </div>
           <details class="editor-wiki">
-            <summary>Довідка: що за що відповідає в редакторі</summary>
-            <div class="wiki-grid">
+            <summary class="editor-wiki-trigger" title="Розгорнути довідку"><span class="editor-wiki-icon" aria-hidden="true">i</span><span class="editor-wiki-label">Довідка</span></summary>
+            <div class="editor-wiki-content"><div class="wiki-grid">
               <div class="wiki-item"><span class="wiki-badge wiki-badge--create">Створити завдання</span><span class="wiki-desc">Додає нове порожнє завдання. Потім заповніть тему, текст і варіанти.</span></div>
               <div class="wiki-item"><span class="wiki-badge wiki-badge--copy">Копіювати</span><span class="wiki-desc">Зберігає поточне завдання у буфер.</span></div>
               <div class="wiki-item"><span class="wiki-badge wiki-badge--copy">Вставити</span><span class="wiki-desc">Додає копію як нове завдання (зручно для схожих завдань).</span></div>
-              <div class="wiki-item"><span class="wiki-badge wiki-badge--list">Список завдань</span><span class="wiki-desc">Усі завдання. Клік — відкрити. Зверху — пошук і сортування. Кнопка ◀ згортає список, щоб розширити редактор.</span></div>
+              <div class="wiki-item"><span class="wiki-badge wiki-badge--list">Список завдань</span><span class="wiki-desc">Завдання збоку. Клік — відкрити. Кнопка «До таблиці» повертає до таблиці всіх завдань.</span></div>
               <div class="wiki-item"><span class="wiki-badge wiki-badge--field">Тема</span><span class="wiki-desc">Назва теми, напр. «Числа і вирази».</span></div>
               <div class="wiki-item"><span class="wiki-badge wiki-badge--field">Текст питання</span><span class="wiki-desc">Основний текст. Формули: <code>\( ... \)</code> або <code>$ ... $</code>. Кнопки LaTeX вставляють код.</span></div>
               <div class="wiki-item"><span class="wiki-badge wiki-badge--field">LaTeX</span><span class="wiki-desc">Додаткова формула. Якщо не потрібно — порожньо.</span></div>
@@ -171,7 +206,7 @@
               <div class="wiki-item"><span class="wiki-badge wiki-badge--action">Зберегти завдання</span><span class="wiki-desc">Зберігає зміни в списку (локально).</span></div>
               <div class="wiki-item"><span class="wiki-badge wiki-badge--action">Видалити</span><span class="wiki-desc">Прибирає поточне завдання зі списку.</span></div>
               <div class="wiki-item"><span class="wiki-badge wiki-badge--action">Зберегти базу на сервер</span><span class="wiki-desc">Відправляє всю базу. Тільки для адміністратора.</span></div>
-            </div>
+            </div></div>
           </details>
           <div class="latex-helper">
             <h4>LaTeX — вставити формулу (поставте курсор у поле і натисніть)</h4>
@@ -267,6 +302,7 @@
             <p class="muted">Адміністратор перегляне ваші завдання і додасть їх у загальну базу після схвалення. Надсилаються лише завдання, створені або збережені (відредаговані) у цій сесії.</p>
             <button type="button" class="btn btn-editor-submit" id="btn-submit-review">Надіслати на перевірку</button>
             <span class="save-status" id="submit-status"></span>
+          </div>
           </div>
         </div>
       </div>

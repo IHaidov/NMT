@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Адмін — НМТ</title>
   <link rel="stylesheet" href="./styles.css" />
+  <script>
+    window.MathJax = { tex: { inlineMath: [['\\(', '\\)'], ['$', '$']], displayMath: [['\\[', '\\]']] }, svg: { fontCache: 'global' } };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
   <style>
     .admin-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
     .admin-tabs { display: flex; gap: 4px; margin-bottom: 16px; }
@@ -29,15 +33,29 @@
     .modal .field-label { display: block; margin-top: 10px; }
     .modal .text-input { width: 100%; margin-top: 4px; }
     .modal-actions { margin-top: 20px; display: flex; gap: 8px; }
+    .diff-stats { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; background: #e0e7ff; color: #3730a3; margin-bottom: 10px; }
     .diff-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
-    .diff-box { padding: 10px 12px; border-radius: 8px; font-size: 0.9rem; }
-    .diff-box.bulo { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
-    .diff-box.stalo { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
-    .diff-box .diff-label { font-weight: 600; font-size: 0.75rem; text-transform: uppercase; margin-bottom: 6px; }
+    .diff-box { padding: 12px 14px; border-radius: 8px; font-size: 0.9rem; line-height: 1.55; font-weight: 600; }
+    .diff-box.bulo { background: #fecaca; border: 2px solid #b91c1c; color: #7f1d1d; }
+    .diff-box.stalo { background: #86efac; border: 2px solid #15803d; color: #14532d; }
+    .diff-box .diff-label { font-weight: 700; font-size: 0.75rem; text-transform: uppercase; margin-bottom: 6px; }
+    .diff-box .math-render { word-break: break-word; }
+    .diff-box .diff-inline-del { background: #dc2626; color: #fff; padding: 1px 4px; border-radius: 4px; font-weight: 700; }
+    .diff-box .diff-inline-ins { background: #16a34a; color: #fff; padding: 1px 4px; border-radius: 4px; font-weight: 700; }
     .preview-student { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-top: 8px; }
     .preview-student .preview-title { font-size: 0.75rem; font-weight: 600; color: #64748b; margin-bottom: 8px; }
+    .student-preview-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+    .student-preview-card .question-content { margin-bottom: 12px; }
+    .student-preview-card .question-text { font-size: 1rem; line-height: 1.6; color: #1a1f2e; }
+    .student-preview-card .diff-highlight { background: #fef08a; padding: 2px 4px; border-radius: 4px; }
+    .student-preview-card .options-list { list-style: none; padding: 0; margin: 0; }
+    .student-preview-card .option-item { padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 8px; display: flex; gap: 10px; }
+    .student-preview-card .matching-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+    .student-preview-card .matching-table td, .student-preview-card .matching-table th { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; }
     .submission-q-block { margin-bottom: 20px; padding: 14px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; }
-    .submission-q-block h4 { margin: 0 0 10px 0; font-size: 1rem; }
+    .submission-q-block h4 { margin: 0 0 8px 0; font-size: 1rem; }
+    .submission-q-about { margin: 0 0 10px 0; font-size: 0.9rem; color: #475569; line-height: 1.45; padding: 8px 10px; background: #f8fafc; border-radius: 6px; border-left: 3px solid #2563eb; }
+    .diff-what { font-size: 0.85rem; color: #64748b; margin-left: 8px; }
     .history-list { list-style: none; padding: 0; margin: 0; }
     .history-list li { padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 0.9rem; }
     .history-list li:last-child { border-bottom: none; }
@@ -459,24 +477,122 @@
       }
 
       function qTypeLabel(q) {
-        if (q.type === "matching" || (q.pairs && q.pairs.length) || (q.options && q.endings)) return "Відповідність";
-        if (q.type === "short" || (q.shortAnswer !== undefined) || (typeof (q.answer) === "string" && !Array.isArray(q.answer))) return "Коротка відповідь";
+        if (q.answer_format === "decimal") return "Коротка відповідь";
+        if (q.statements || (q.options && Array.isArray(q.options) && q.options[0] && q.options[0].matches) || q.endings) return "Відповідність";
+        if (typeof q.answer === "string" && !Array.isArray(q.answer)) return "Коротка відповідь";
         return "Варіант";
       }
-      function questionSummary(q) {
-        var t = (q.topic || "").trim();
-        var text = (q.question || "").replace(/<[^>]+>/g, "").trim().slice(0, 200);
-        var type = qTypeLabel(q);
-        var ans = "";
-        if (type === "Коротка відповідь") ans = typeof q.answer === "string" ? q.answer : (q.answer != null ? String(q.answer) : "—");
-        else if (type === "Варіант" && q.answer && q.answer[0]) ans = q.answer[0].label || q.answer[0].statement || "—";
-        else if (type === "Відповідність" && q.answer) ans = typeof q.answer === "object" && !Array.isArray(q.answer) ? Object.keys(q.answer).length + " пар" : (Array.isArray(q.answer) ? q.answer.length + " пар" : "—");
-        return (t ? "Тема: " + t + ". " : "") + "Текст: " + (text || "—") + (text.length >= 200 ? "…" : "") + ". Тип: " + type + ". Відповідь: " + ans;
+      function getLeftItems(q) {
+        if (q.statements && typeof q.statements === "object") return q.statements;
+        if (q.options && Array.isArray(q.options) && q.options[0] && q.options[0].matches) {
+          var o = {}; q.options.forEach(function (e) { o[e.label] = e.text != null ? e.text : (e.latex || ""); }); return o;
+        }
+        return {};
       }
-      function questionPreviewHtml(q) {
-        var text = (q.question || "").replace(/<[^>]+>/g, " ").trim().slice(0, 300);
+      function getRightItems(q) {
+        if (q.endings) return q.endings;
+        if (q.options && typeof q.options === "object" && !Array.isArray(q.options)) return q.options;
+        return {};
+      }
+      function getPairs(q) {
+        var a = q.answer; if (!a) return [];
+        if (Array.isArray(a)) return a.map(function (p) {
+          var k = p.statement || p.expression || p.segment || p.label; return k ? { key: k, label: p.label } : null;
+        }).filter(Boolean);
+        if (typeof a === "object") return Object.keys(a).map(function (k) { return { key: String(k), label: String(a[k]) }; });
+        return [];
+      }
+      function wrapLatex(s) { if (!s) return ""; return "\\( " + s + " \\)"; }
+      function looksLikeLatex(s) { return typeof s === "string" && (s.indexOf("\\") !== -1 || s.indexOf("^{") !== -1); }
+      function fieldStr(v) { if (v == null) return ""; if (typeof v === "object") return JSON.stringify(v); return String(v).trim(); }
+      function inlineDiff(oldStr, newStr) {
+        oldStr = String(oldStr == null ? "" : oldStr);
+        newStr = String(newStr == null ? "" : newStr);
+        var i = 0;
+        while (i < oldStr.length && i < newStr.length && oldStr[i] === newStr[i]) i++;
+        var prefix = oldStr.slice(0, i);
+        var oldRest = oldStr.slice(i);
+        var newRest = newStr.slice(i);
+        var sufLen = 0;
+        while (sufLen < oldRest.length && sufLen < newRest.length && oldRest[oldRest.length - 1 - sufLen] === newRest[newRest.length - 1 - sufLen]) sufLen++;
+        var oldMid = oldRest.slice(0, oldRest.length - sufLen);
+        var newMid = newRest.slice(0, newRest.length - sufLen);
+        var suffix = oldRest.slice(-sufLen);
+        var prefixEsc = escHtml(prefix);
+        var suffixEsc = escHtml(suffix);
+        var oldMidEsc = escHtml(oldMid) || "—";
+        var newMidEsc = escHtml(newMid) || "—";
+        var oldHtml = prefixEsc + (oldMid ? "<span class=\"diff-inline-del\">" + oldMidEsc + "</span>" : "") + suffixEsc;
+        var newHtml = prefixEsc + (newMid ? "<span class=\"diff-inline-ins\">" + newMidEsc + "</span>" : "") + suffixEsc;
+        return { oldHtml: oldHtml || "—", newHtml: newHtml || "—" };
+      }
+      function diffQuestions(oldQ, newQ) {
+        var fields = [
+          { key: "topic", label: "Тема", get: function (q) { return fieldStr(q.topic); } },
+          { key: "question", label: "Текст питання", get: function (q) { return fieldStr(q.question); } },
+          { key: "latex", label: "LaTeX", get: function (q) { return fieldStr(q.latex); } },
+          { key: "image", label: "Зображення", get: function (q) { return fieldStr(q.image); } },
+          { key: "answer", label: "Відповідь", get: function (q) { return fieldStr(q.answer); } },
+          { key: "options", label: "Варіанти", get: function (q) { return fieldStr(q.options); } },
+          { key: "endings", label: "Закінчення", get: function (q) { return fieldStr(q.endings); } },
+          { key: "statements", label: "Початок", get: function (q) { return fieldStr(q.statements); } }
+        ];
+        var rows = [];
+        var changedCount = 0;
+        fields.forEach(function (f) {
+          var oldVal = f.get(oldQ || {});
+          var newVal = f.get(newQ || {});
+          if (oldVal === newVal) return;
+          changedCount++;
+          var pair = inlineDiff(oldVal, newVal);
+          rows.push({ label: f.label, oldHtml: pair.oldHtml, newHtml: pair.newHtml });
+        });
+        return { changedCount: changedCount, rows: rows };
+      }
+      function studentPreviewHtml(q, highlightFields) {
+        highlightFields = highlightFields || [];
+        var H = function (cls, html) { return cls ? "<span class=\"diff-highlight\">" + html + "</span>" : html; };
+        var topic = (q.topic || "—").trim();
+        var question = (q.question || "").replace(/<[^>]+>/g, " ");
+        var topicHtml = H(highlightFields.indexOf("topic") !== -1, escHtml(topic));
+        var questionHtml = H(highlightFields.indexOf("question") !== -1, escHtml(question));
+        var html = "<div class=\"student-preview-card math-render\"><div class=\"question-content\"><div class=\"question-text\">" + topicHtml + "</div><div class=\"question-text\">" + questionHtml + "</div></div>";
+        if (q.image && q.image.trim()) html += "<div class=\"question-image-container\"><img src=\"" + escAttr(q.image.trim()) + "\" alt=\"\" style=\"max-width:100%;border-radius:8px;\" /></div>";
         var type = qTypeLabel(q);
-        return "<div class=\"preview-student\"><div class=\"preview-title\">Як це бачить учень</div><div><strong>" + escHtml(q.topic || "—") + "</strong></div><p style=\"margin:8px 0 0 0;\">" + escHtml(text) + (text.length >= 300 ? "…" : "") + "</p><p style=\"margin:6px 0 0 0;font-size:0.85rem;color:#64748b;\">Тип: " + escHtml(type) + "</p></div>";
+        if (type === "Варіант" && q.options && q.options.length) {
+          var correctLabels = (q.answer || []).map(function (a) { return a.label; });
+          html += "<ul class=\"options-list\">";
+          q.options.forEach(function (opt) {
+            var text = (opt.latex ? wrapLatex(opt.latex) : escHtml(opt.text || ""));
+            html += "<li class=\"option-item\">" + (correctLabels.indexOf(opt.label) !== -1 ? "<strong>" : "") + opt.label + ") " + text + (correctLabels.indexOf(opt.label) !== -1 ? "</strong>" : "") + "</li>";
+          });
+          html += "</ul>";
+        } else if (type === "Відповідність") {
+          var leftItems = getLeftItems(q);
+          var rightItems = getRightItems(q);
+          var pairs = getPairs(q);
+          var pairMap = {}; pairs.forEach(function (p) { pairMap[p.key] = p.label; });
+          var leftKeys = Object.keys(leftItems).sort();
+          html += "<table class=\"matching-table\"><thead><tr><th>Початок</th><th>Відповідь</th></tr></thead><tbody>";
+          leftKeys.forEach(function (key) {
+            var leftVal = leftItems[key];
+            var leftStr = (leftVal != null ? String(leftVal) : "");
+            var leftDisp = looksLikeLatex(leftStr) ? wrapLatex(leftStr) : escHtml(leftStr);
+            var sel = pairMap[key];
+            var rightDisp = "—";
+            if (sel && rightItems[sel] != null) {
+              var rStr = String(rightItems[sel]);
+              rightDisp = looksLikeLatex(rStr) ? sel + ") " + wrapLatex(rStr) : escHtml(sel + ") " + rStr);
+            }
+            html += "<tr><td class=\"math-render\">" + key + ") " + leftDisp + "</td><td class=\"math-render\">" + rightDisp + "</td></tr>";
+          });
+          html += "</tbody></table>";
+        } else {
+          var ans = typeof q.answer === "string" ? q.answer : (q.answer != null ? String(q.answer) : "—");
+          html += "<p><strong>Правильна відповідь:</strong> <span class=\"math-render\">" + (looksLikeLatex(ans) ? wrapLatex(ans) : escHtml(ans)) + "</span></p>";
+        }
+        html += "</div>";
+        return html;
       }
       function openQuestionHistory(questionId) {
         if (questionId == null) return;
@@ -522,13 +638,30 @@
           qList.forEach(function (q, i) {
             var oldQ = mainBank.find(function (x) { return x.id == q.id; });
             var isEdit = !!oldQ;
+            var qTopic = (q.topic || "").trim() || "—";
+            var qText = (q.question || "").replace(/<[^>]+>/g, " ").trim().slice(0, 80);
+            if (qText.length >= 80) qText += "…";
             html += "<div class=\"submission-q-block\">";
             html += "<h4>Завдання #" + (i + 1) + (isEdit ? " — редагування (id " + q.id + ")" : " — нове завдання") + "</h4>";
+            html += "<p class=\"submission-q-about\"><strong>Про що:</strong> " + escHtml(qTopic) + " · " + escHtml(qText || "—") + "</p>";
             if (isEdit) {
-              html += "<div class=\"diff-row\"><div class=\"diff-box bulo\"><div class=\"diff-label\">Було</div>" + escHtml(questionSummary(oldQ)) + "</div>";
-              html += "<div class=\"diff-box stalo\"><div class=\"diff-label\">Стало</div>" + escHtml(questionSummary(q)) + "</div></div>";
+              var diff = diffQuestions(oldQ, q);
+              var changedList = diff.rows.map(function (r) { return r.label; }).join(", ");
+              html += "<p><span class=\"diff-stats\">Змінено рядків: " + diff.changedCount + "</span>" + (changedList ? " <span class=\"diff-what\">Що саме: " + escHtml(changedList) + "</span>" : "") + "</p>";
+              diff.rows.forEach(function (r) {
+                html += "<div class=\"diff-row\"><div class=\"diff-box bulo\"><div class=\"diff-label\">" + escHtml(r.label) + " — було</div><div class=\"math-render\">" + r.oldHtml + "</div></div>";
+                html += "<div class=\"diff-box stalo\"><div class=\"diff-label\">" + escHtml(r.label) + " — стало</div><div class=\"math-render\">" + r.newHtml + "</div></div></div>";
+              });
+              var changedKeys = diff.rows.map(function (r) { return r.label; });
+              var highlightFields = [];
+              if (changedKeys.indexOf("Тема") !== -1) highlightFields.push("topic");
+              if (changedKeys.indexOf("Текст питання") !== -1) highlightFields.push("question");
+              html += "<div class=\"preview-student\" style=\"margin-top:14px;\"><div class=\"preview-title\">Як для учня (було / стало з виділенням змін)</div>";
+              html += "<div class=\"diff-row\" style=\"margin-top:8px;\"><div><div class=\"preview-title\">Було</div>" + studentPreviewHtml(oldQ, highlightFields) + "</div>";
+              html += "<div><div class=\"preview-title\">Стало</div>" + studentPreviewHtml(q, highlightFields) + "</div></div></div>";
+            } else {
+              html += "<div class=\"preview-student\"><div class=\"preview-title\">Як для учня</div>" + studentPreviewHtml(q, []) + "</div>";
             }
-            html += questionPreviewHtml(q);
             if (q.id != null) {
               html += "<p style=\"margin-top:10px;\"><button type=\"button\" class=\"btn btn-small btn-history\" data-qid=\"" + escAttr(String(q.id)) + "\">Історія змін</button></p>";
             }
@@ -543,6 +676,9 @@
           document.getElementById("submission-modal-overlay").classList.add("show");
           document.getElementById("submission-approve").style.display = sub.status === "pending" ? "" : "none";
           document.getElementById("submission-reject").style.display = sub.status === "pending" ? "" : "none";
+          if (window.MathJax && window.MathJax.typesetPromise) {
+            window.MathJax.typesetPromise([document.getElementById("submission-modal-body")]).catch(function () {});
+          }
         }).catch(function (e) { alert(e.message); });
       }
 

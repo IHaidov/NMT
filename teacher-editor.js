@@ -171,19 +171,67 @@
       var a = document.createElement("a");
       a.href = "#";
       a.dataset.index = idx;
-      var preview = (q.question || "").replace(/<[^>]+>/g, "").slice(0, 50);
       var typeLabel = classify(q) === "single" ? "Варіант" : (classify(q) === "matching" ? "Відповідність" : "Коротка");
-      a.innerHTML = "<span class=\"q-preview\">" + escapeHtml(preview) + (preview.length >= 50 ? "…" : "") + "</span><span class=\"q-meta\">id: " + (q.id != null ? q.id : "—") + " · " + (q.topic || "—") + " · " + typeLabel + "</span>";
+      var questionRaw = (q.question || "").replace(/<[^>]+>/g, "");
+      var topicRaw = (q.topic || "—");
+      a.innerHTML = "<span class=\"q-preview math-render\">" + escapeHtml(questionRaw) + "</span><span class=\"q-meta math-render\">" + escapeHtml(topicRaw) + " · " + escapeHtml(typeLabel) + "</span>";
       a.addEventListener("click", function (e) { e.preventDefault(); selectQuestion(idx); });
       li.appendChild(a);
       questionList.appendChild(li);
     });
     updateListActiveState();
+    typesetMath(questionList);
+  }
+
+  function renderTable() {
+    var tbody = document.getElementById("question-table-body");
+    if (!tbody) return;
+    var indices = getFilteredAndSortedIndices();
+    tbody.innerHTML = "";
+    indices.forEach(function (idx) {
+      var q = questions[idx];
+      var tr = document.createElement("tr");
+      tr.dataset.index = idx;
+      tr.title = "Клікніть, щоб відкрити завдання";
+      if (idx === currentIndex) tr.classList.add("selected");
+      var questionRaw = (q.question || "").replace(/<[^>]+>/g, "").trim() || "—";
+      var typeLabel = classify(q) === "single" ? "Варіант" : (classify(q) === "matching" ? "Відповідність" : "Коротка");
+      var topicRaw = (q.topic || "").trim() || "—";
+      tr.innerHTML = "<td>" + (q.id != null ? q.id : "—") + "</td><td class=\"col-topic math-render\">" + escapeHtml(topicRaw) + "</td><td class=\"col-preview math-render\">" + escapeHtml(questionRaw) + "</td><td class=\"col-type\">" + escapeHtml(typeLabel) + "</td><td>" + (q._local ? "<span class=\"tag-local\">локальне</span>" : "") + "</td>";
+      tr.addEventListener("click", function () { selectQuestion(idx); });
+      tbody.appendChild(tr);
+    });
+    typesetMath(tbody);
+  }
+
+  function typesetMath(container) {
+    if (!container || !window.MathJax || !window.MathJax.typesetPromise) return;
+    window.MathJax.typesetPromise([container]).catch(function () {});
+  }
+
+  function updateEditorView() {
+    var layout = editorRoot;
+    var tableWrap = document.getElementById("tasks-table-full-wrap");
+    var editorContentWrap = document.getElementById("editor-content-wrap");
+    if (!layout || !tableWrap || !editorContentWrap) return;
+    var inTable = currentIndex < 0;
+    layout.classList.toggle("table-view", inTable);
+    tableWrap.classList.toggle("hidden", !inTable);
+    editorContentWrap.classList.toggle("hidden", inTable);
+    if (inTable) {
+      renderTable();
+    } else {
+      renderList();
+    }
   }
 
   function updateListActiveState() {
     questionList.querySelectorAll("a").forEach(function (a) {
       a.classList.toggle("active", parseInt(a.dataset.index, 10) === currentIndex);
+    });
+    var tbody = document.getElementById("question-table-body");
+    if (tbody) tbody.querySelectorAll("tr").forEach(function (tr) {
+      tr.classList.toggle("selected", parseInt(tr.dataset.index, 10) === currentIndex);
     });
   }
 
@@ -196,10 +244,17 @@
 
   function selectQuestion(idx) {
     currentIndex = idx;
-    updateListActiveState();
+    updateEditorView();
     noSelection.classList.add("hidden");
     questionForm.classList.remove("hidden");
     fillForm(questions[idx]);
+  }
+
+  function goToTable() {
+    currentIndex = -1;
+    noSelection.classList.remove("hidden");
+    questionForm.classList.add("hidden");
+    updateEditorView();
   }
 
   function fillForm(q) {
@@ -329,12 +384,15 @@
     var id = parseInt(fId.value, 10);
     if (isNaN(id) || id < 1) id = Math.max(1, (questions.length ? Math.max.apply(null, questions.map(function (q) { return q.id || 0; })) + 1 : 1));
     var type = fType.value;
+    var existing = currentIndex >= 0 ? questions[currentIndex] : null;
     var q = {
       id: id,
       topic: (fTopic.value || "").trim(),
       question: (fQuestion.value || "").trim(),
       latex: (fLatex.value || "").trim() || undefined,
       image: (fImage.value || "").trim() || undefined,
+      _local: existing && existing._local === true,
+      _newSession: existing && existing._newSession === true,
     };
     if (type === "single") {
       var opts = [];
@@ -568,6 +626,7 @@
     var maxId = questions.length ? Math.max.apply(null, questions.map(function (x) { return x.id || 0; })) : 0;
     q.id = maxId + 1;
     q._local = true;
+    q._newSession = true;
     questions.push(q);
     currentIndex = questions.length - 1;
     renderList();
@@ -624,7 +683,7 @@
     currentIndex = -1;
     questionForm.classList.add("hidden");
     noSelection.classList.remove("hidden");
-    renderList();
+    updateEditorView();
     persistQuestionsToServer().catch(function (e) {
       saveStatus.textContent = "Список оновлено, але збереження на сервер не вдалося: " + (e.message || "");
       saveStatus.classList.add("error");
@@ -659,13 +718,14 @@
       options: [{ label: "А", text: "", latex: "" }, { label: "Б", text: "", latex: "" }],
       answer: [],
       _local: true,
+      _newSession: true,
     };
     questions.push(q);
     currentIndex = questions.length - 1;
-    renderList();
     noSelection.classList.add("hidden");
     questionForm.classList.remove("hidden");
     fillForm(q);
+    updateEditorView();
   }
 
   function loadQuestions() {
@@ -681,10 +741,10 @@
           }
           questions = Array.isArray(data) ? data : (data.questions || data.data || []);
           questions.forEach(function (q) { q._local = false; });
-          renderList();
           currentIndex = -1;
           noSelection.classList.remove("hidden");
           questionForm.classList.add("hidden");
+          updateEditorView();
         });
     }
     return api("/api/teacher/editor-draft")
@@ -703,10 +763,10 @@
       .then(function (list) {
         questions = list;
         questions.forEach(function (q) { q._local = false; });
-        renderList();
         currentIndex = -1;
         noSelection.classList.remove("hidden");
         questionForm.classList.add("hidden");
+        updateEditorView();
       });
   }
 
@@ -735,8 +795,13 @@
     saveCurrentQuestion();
   });
 
-  if (questionSearch) questionSearch.addEventListener("input", renderList);
-  if (questionSort) questionSort.addEventListener("change", renderList);
+  if (questionSearch) questionSearch.addEventListener("input", function () { if (currentIndex >= 0) renderList(); else renderTable(); });
+  if (questionSort) questionSort.addEventListener("change", function () { if (currentIndex >= 0) renderList(); else renderTable(); });
+
+  document.getElementById("btn-back-to-table").addEventListener("click", goToTable);
+  document.getElementById("btn-new-question-table").addEventListener("click", function () {
+    newQuestion();
+  });
 
   (function () {
     var sidebar = document.getElementById("editor-sidebar");
