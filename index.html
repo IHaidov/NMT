@@ -21,12 +21,13 @@
   <div class="app-container">
     <header class="app-header">
       <div class="header-left">
+        <a href="./index.html" class="header-logo" title="На початковий екран">НМТ</a>
         <div class="header-text">
           <h1>Підготовчі завдання з Математики для національного мультипредметного тесту</h1>
           <p class="header-subtitle">Тренувальний онлайн-тренажер</p>
         </div>
       </div>
-      <div class="header-right">
+      <div class="header-right header-nav">
         <a href="./teacher.html" class="info-link"><span class="info-icon">👤</span><span class="info-text">Вчитель</span></a>
         <a href="./admin.html" class="info-link"><span class="info-icon">⚙</span><span class="info-text">Адмін</span></a>
       </div>
@@ -81,7 +82,13 @@
         </aside>
 
         <section class="question-area">
-          <div id="timer" class="timer" aria-live="polite"></div>
+          <div class="question-area-top">
+            <div id="timer" class="timer" aria-live="polite"></div>
+            <button type="button" id="formula-ref-btn" class="btn btn-formula-ref" title="Довідка з формул">
+              <span class="formula-ref-icon">∑</span>
+              <span class="formula-ref-text">Довідка формул</span>
+            </button>
+          </div>
           <div id="question-card" class="card question-card">
             <div class="question-header">
               <div>
@@ -110,6 +117,89 @@
   <footer class="page-footer">
     <p>Підготувала — Гайдова Віра Вікторівна · 2026 · </p>
   </footer>
+
+  <!-- Довідка формул: модальне вікно з табами, можна згорнути -->
+  <div id="formula-ref-overlay" class="formula-ref-overlay hidden" aria-hidden="true">
+    <div id="formula-ref-modal" class="formula-ref-modal">
+      <div class="formula-ref-modal-header">
+        <h3 class="formula-ref-title">Довідка з формул</h3>
+        <div class="formula-ref-actions">
+          <button type="button" id="formula-ref-collapse-btn" class="btn-formula-ref-small" title="Згорнути">−</button>
+          <button type="button" id="formula-ref-close-btn" class="btn-formula-ref-small" title="Закрити">×</button>
+        </div>
+      </div>
+      <div class="formula-ref-tabs">
+        <button type="button" class="formula-tab active" data-tab="algebra">Алгебра</button>
+        <button type="button" class="formula-tab" data-tab="geometry">Геометрія</button>
+        <button type="button" class="formula-tab" data-tab="equations">Рівняння та нерівності</button>
+        <button type="button" class="formula-tab" data-tab="functions">Функції</button>
+      </div>
+      <div class="formula-ref-body">
+        <div id="formula-panel-algebra" class="formula-panel active">
+          <p class="formula-panel-desc">Числа, вирази, степені, корені.</p>
+          <div class="formula-block">
+            <h4>Степінь</h4>
+            <p>\( a^n \cdot a^m = a^{n+m} \), \(\ a^n : a^m = a^{n-m} \), \(\ (a^n)^m = a^{nm} \), \(\ (ab)^n = a^n b^n \)</p>
+            <p>\( a^0 = 1 \), \(\ a^{-n} = \frac{1}{a^n} \)</p>
+          </div>
+          <div class="formula-block">
+            <h4>Квадратний корінь</h4>
+            <p>\( \sqrt{a^2} = |a| \), \(\ \sqrt{ab} = \sqrt{a}\sqrt{b} \), \(\ \sqrt{\frac{a}{b}} = \frac{\sqrt{a}}{\sqrt{b}} \)</p>
+          </div>
+          <div class="formula-block">
+            <h4>Квадрат суми та різниці</h4>
+            <p>\( (a+b)^2 = a^2 + 2ab + b^2 \), \(\ (a-b)^2 = a^2 - 2ab + b^2 \), \(\ a^2 - b^2 = (a-b)(a+b) \)</p>
+          </div>
+        </div>
+        <div id="formula-panel-geometry" class="formula-panel">
+          <p class="formula-panel-desc">Фігури на площині, площі, об'єми.</p>
+          <div class="formula-block">
+            <h4>Трикутник</h4>
+            <p>\( S = \frac{1}{2}ah \), \(\ S = \frac{1}{2}ab\sin\gamma \)</p>
+          </div>
+          <div class="formula-block">
+            <h4>Паралелограм, ромб</h4>
+            <p>\( S = ah \), \(\ S_{\text{ромба}} = \frac{1}{2}d_1 d_2 \)</p>
+          </div>
+          <div class="formula-block">
+            <h4>Коло</h4>
+            <p>\( C = 2\pi R \), \(\ S = \pi R^2 \)</p>
+          </div>
+          <div class="formula-block">
+            <h4>Прямокутний паралелепіпед, куля</h4>
+            <p>\( V = abc \), \(\ S_{\text{пов}} = 2(ab+bc+ac) \), \(\ V_{\text{кулі}} = \frac{4}{3}\pi R^3 \), \(\ S_{\text{кулі}} = 4\pi R^2 \)</p>
+          </div>
+        </div>
+        <div id="formula-panel-equations" class="formula-panel">
+          <p class="formula-panel-desc">Лінійні та квадратні рівняння, нерівності.</p>
+          <div class="formula-block">
+            <h4>Квадратне рівняння</h4>
+            <p>\( ax^2 + bx + c = 0 \), \(\ D = b^2 - 4ac \)</p>
+            <p>\( x_{1,2} = \frac{-b \pm \sqrt{D}}{2a} \), \(\ x_1 + x_2 = -\frac{b}{a} \), \(\ x_1 x_2 = \frac{c}{a} \)</p>
+          </div>
+          <div class="formula-block">
+            <h4>Нерівності</h4>
+            <p>\( |x| < a \Leftrightarrow -a < x < a \), \(\ |x| > a \Leftrightarrow x < -a \text{ або } x > a \)</p>
+          </div>
+        </div>
+        <div id="formula-panel-functions" class="formula-panel">
+          <p class="formula-panel-desc">Лінійна та квадратична функції.</p>
+          <div class="formula-block">
+            <h4>Лінійна функція</h4>
+            <p>\( y = kx + b \) — пряма, \( k \) — кутовий коефіцієнт</p>
+          </div>
+          <div class="formula-block">
+            <h4>Квадратична функція</h4>
+            <p>\( y = ax^2 + bx + c \), вершина параболи: \(\ x_0 = -\frac{b}{2a} \), \(\ y_0 = -\frac{D}{4a} \)</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="formula-ref-bar" class="formula-ref-bar hidden" aria-hidden="true">
+    <span>Довідка формул</span>
+    <button type="button" id="formula-ref-expand-btn" class="btn-formula-ref-small" title="Розгорнути">+</button>
+  </div>
 
   <script src="./app.js"></script>
 </body>

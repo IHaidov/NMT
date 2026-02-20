@@ -32,14 +32,13 @@
   <div class="app-container">
     <header class="app-header">
       <div class="header-left">
+        <a href="./index.html" class="header-logo" title="На початковий екран">НМТ</a>
         <div class="header-text">
           <h1>Кабінет вчителя</h1>
           <p class="header-subtitle">Підготовчі завдання з Математики для національного мультипредметного тесту</p>
         </div>
       </div>
-      <div class="header-right">
-        <a href="./index.html" class="info-link"><span class="info-icon">←</span><span class="info-text">На головну</span></a>
-      </div>
+      <div class="header-right header-nav" id="teacher-header-actions"></div>
     </header>
 
     <main id="auth-screen">
@@ -69,11 +68,8 @@
       <section class="card teacher-dash">
         <div class="teacher-header">
           <h2>Мої класи</h2>
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-            <a href="./teacher-questions.html" class="btn btn-secondary" style="text-decoration:none;">База питань</a>
-            <a href="./teacher-editor.html" class="btn btn-secondary" style="text-decoration:none;">Редактор завдань</a>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;" id="teacher-dash-actions">
             <span class="teacher-user" id="teacher-name"></span>
-            <button type="button" id="btn-logout" class="btn btn-secondary logout-btn">Вийти</button>
           </div>
         </div>
         <p class="muted" style="margin:0 0 16px 0;">У кожного класу свій код доступу (OTP). Учні вводять код класу на головній сторінці тесту — після введення пошти вони автоматично приписуються до цього класу.</p>
@@ -97,6 +93,7 @@
       function showAuth() {
         authScreen.classList.remove("hidden");
         dashboardScreen.classList.add("hidden");
+        document.getElementById("teacher-header-actions").innerHTML = "";
       }
       function showDashboard() {
         authScreen.classList.add("hidden");
@@ -133,14 +130,37 @@
           .catch(function (e) { document.getElementById("login-error").textContent = e.message || "Помилка входу"; });
       });
 
-      document.getElementById("btn-logout").addEventListener("click", function () {
-        fetch("/api/teachers/logout", { method: "POST", credentials: "include" }).then(function () { showAuth(); });
-      });
+      function buildTeacherHeader(teacher) {
+        var actions = document.getElementById("teacher-header-actions");
+        var parts = [
+          '<a href="./teacher-questions.html" class="info-link">База питань</a>',
+          '<a href="./teacher-editor.html" class="info-link">Редактор завдань</a>'
+        ];
+        if (teacher.isImpersonated) {
+          parts.push('<span class="teacher-user" style="font-size:0.85rem;color:#64748b;">Від імені: ' + escapeHtml(teacher.name) + '</span>');
+          parts.push('<a href="#" id="btn-stop-impersonate" class="info-link">Повернутись до адміна</a>');
+        }
+        parts.push('<span class="teacher-user" id="teacher-name">' + escapeHtml(teacher.name) + ' (' + escapeHtml(teacher.email) + ')</span>');
+        parts.push('<button type="button" id="btn-logout" class="btn btn-secondary logout-btn">Вийти</button>');
+        actions.innerHTML = parts.join("");
+        document.getElementById("btn-logout").addEventListener("click", function () {
+          fetch("/api/teachers/logout", { method: "POST", credentials: "include" }).then(function () { showAuth(); });
+        });
+        var stopBtn = document.getElementById("btn-stop-impersonate");
+        if (stopBtn) {
+          stopBtn.addEventListener("click", function (e) {
+            e.preventDefault();
+            fetch("/api/admin/stop-impersonate", { method: "POST", credentials: "include" })
+              .then(function () { window.location.href = "admin.html"; });
+          });
+        }
+      }
 
       function loadDashboard() {
         api("/api/teachers/me").then(function (data) {
           if (data.teacher && data.teacher.isAdmin) { window.location.href = "admin.html"; return Promise.reject(); }
           teacherNameEl.textContent = data.teacher.name + " (" + data.teacher.email + ")";
+          buildTeacherHeader(data.teacher);
           return api("/api/classes");
         }).then(function (data) {
           classList.innerHTML = "";

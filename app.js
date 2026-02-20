@@ -1052,3 +1052,64 @@ function tryRestoreTest() {
   startTimer(true);
 }
 
+// Довідка формул: модальне вікно з табами, можна згорнути
+(function initFormulaRef() {
+  const overlay = document.getElementById("formula-ref-overlay");
+  const modal = document.getElementById("formula-ref-modal");
+  const bar = document.getElementById("formula-ref-bar");
+  const openBtn = document.getElementById("formula-ref-btn");
+  const closeBtn = document.getElementById("formula-ref-close-btn");
+  const collapseBtn = document.getElementById("formula-ref-collapse-btn");
+  const expandBtn = document.getElementById("formula-ref-expand-btn");
+
+  if (!overlay || !modal || !openBtn) return;
+
+  function openModal() {
+    overlay.classList.remove("hidden");
+    overlay.setAttribute("aria-hidden", "false");
+    bar.classList.add("hidden");
+    if (window.MathJax && window.MathJax.typesetPromise) {
+      window.MathJax.typesetPromise([modal]).catch(() => {});
+    }
+  }
+  function closeModal() {
+    overlay.classList.add("hidden");
+    overlay.setAttribute("aria-hidden", "true");
+    bar.classList.add("hidden");
+  }
+  function collapseModal() {
+    overlay.classList.add("hidden");
+    bar.classList.remove("hidden");
+    bar.setAttribute("aria-hidden", "false");
+  }
+  function expandFromBar() {
+    bar.classList.add("hidden");
+    overlay.classList.remove("hidden");
+    if (window.MathJax && window.MathJax.typesetPromise) {
+      window.MathJax.typesetPromise([modal]).catch(() => {});
+    }
+  }
+
+  openBtn.addEventListener("click", openModal);
+  closeBtn && closeBtn.addEventListener("click", closeModal);
+  collapseBtn && collapseBtn.addEventListener("click", collapseModal);
+  expandBtn && expandBtn.addEventListener("click", expandFromBar);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeModal();
+  });
+
+  document.querySelectorAll(".formula-tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      const name = tab.getAttribute("data-tab");
+      document.querySelectorAll(".formula-tab").forEach((t) => t.classList.remove("active"));
+      document.querySelectorAll(".formula-panel").forEach((p) => p.classList.remove("active"));
+      tab.classList.add("active");
+      const panel = document.getElementById("formula-panel-" + name);
+      if (panel) panel.classList.add("active");
+      if (window.MathJax && window.MathJax.typesetPromise) {
+        window.MathJax.typesetPromise([modal]).catch(() => {});
+      }
+    });
+  });
+})();
+

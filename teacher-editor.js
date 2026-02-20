@@ -4,6 +4,7 @@
   var lastFocusedInput = null;
   var teacherIsAdmin = false;
   var COPY_STORAGE_KEY = "nmt-editor-copied-question";
+  var EDITOR_STATE_KEY = "nmt-editor-state";
 
   var authRequired = document.getElementById("editor-auth-required");
   var editorRoot = document.getElementById("editor-root");
@@ -248,6 +249,10 @@
     noSelection.classList.add("hidden");
     questionForm.classList.remove("hidden");
     fillForm(questions[idx]);
+    try {
+      var q = questions[idx];
+      sessionStorage.setItem(EDITOR_STATE_KEY, JSON.stringify({ view: "editor", questionId: q && q.id != null ? q.id : null }));
+    } catch (e) {}
   }
 
   function goToTable() {
@@ -255,6 +260,29 @@
     noSelection.classList.remove("hidden");
     questionForm.classList.add("hidden");
     updateEditorView();
+    try {
+      sessionStorage.setItem(EDITOR_STATE_KEY, JSON.stringify({ view: "table", questionId: null }));
+    } catch (e) {}
+  }
+
+  function restoreEditorState() {
+    try {
+      var raw = sessionStorage.getItem(EDITOR_STATE_KEY);
+      if (!raw) return;
+      var state = JSON.parse(raw);
+      if (state.view === "table") return;
+      if (state.questionId == null) return;
+      var idx = -1;
+      for (var i = 0; i < questions.length; i++) {
+        if (questions[i].id == state.questionId) { idx = i; break; }
+      }
+      if (idx < 0) return;
+      currentIndex = idx;
+      noSelection.classList.add("hidden");
+      questionForm.classList.remove("hidden");
+      fillForm(questions[idx]);
+      updateEditorView();
+    } catch (e) {}
   }
 
   function fillForm(q) {
@@ -745,6 +773,7 @@
           noSelection.classList.remove("hidden");
           questionForm.classList.add("hidden");
           updateEditorView();
+          restoreEditorState();
         });
     }
     return api("/api/teacher/editor-draft")
@@ -767,6 +796,7 @@
         noSelection.classList.remove("hidden");
         questionForm.classList.add("hidden");
         updateEditorView();
+        restoreEditorState();
       });
   }
 

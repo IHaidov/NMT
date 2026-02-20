@@ -57,9 +57,19 @@
     .latex-btns { display: flex; flex-wrap: wrap; gap: 8px; }
     .latex-btns button { padding: 6px 12px; border-radius: 6px; border: 1px solid #7dd3fc; background: #fff; cursor: pointer; font-size: 0.85rem; }
     .latex-btns button:hover { background: #e0f2fe; }
+    .editor-form #f-type { width: 100%; max-width: 340px; padding: 10px 36px 10px 14px; border-radius: 10px; border: 1px solid #c7d2fe; background: #f8fafc url('data:image/svg+xml,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"%23475569\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"6 9 12 15 18 9\"/></svg>') no-repeat right 10px center; background-size: 18px; font-size: 0.95rem; color: #1e293b; cursor: pointer; appearance: none; -webkit-appearance: none; }
+    .editor-form #f-type:hover { border-color: #2563eb; background-color: #fff; }
+    .editor-form #f-type:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2); }
+    .single-options-header { display: grid; grid-template-columns: 48px 0 1fr 44px; gap: 10px; align-items: center; margin-bottom: 8px; padding: 0 4px; font-size: 0.8rem; font-weight: 600; color: #64748b; }
+    .single-options-header span:nth-child(2) { display: none; }
     .option-row, .pair-row, .kv-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+    .option-row { display: grid; grid-template-columns: 48px 0 1fr 44px; gap: 10px; align-items: center; }
     .option-row input, .pair-row input, .kv-row input { flex: 1; min-width: 100px; }
-    .option-row .opt-label { width: 40px; }
+    .option-row .opt-label { width: 48px; min-width: 48px; max-width: 48px; overflow: hidden; }
+    .option-row .opt-label-in { width: 100%; max-width: 48px; min-width: 0; box-sizing: border-box; text-align: center; font-weight: 600; color: #475569; }
+    .option-row .opt-text-in { display: none; }
+    .option-row .opt-latex-in { min-width: 0; }
+    .option-row .btn-remove { justify-self: end; }
     .btn-remove { padding: 6px 10px; background: #fee2e2; border: 1px solid #fecaca; border-radius: 6px; cursor: pointer; color: #b91c1c; }
     .btn-add { padding: 8px 14px; background: #dbeafe; border: 1px solid #93c5fd; border-radius: 8px; cursor: pointer; font-size: 0.9rem; margin-top: 8px; }
     .type-panel { display: none; }
@@ -129,12 +139,13 @@
   <div class="app-container">
     <header class="app-header">
       <div class="header-left">
+        <a href="./index.html" class="header-logo" title="На початковий екран">НМТ</a>
         <div class="header-text">
           <h1>Редактор завдань</h1>
           <p class="header-subtitle">Створення та редагування питань тесту (один варіант, відповідність, коротка відповідь)</p>
         </div>
       </div>
-      <div class="header-right">
+      <div class="header-right header-nav">
         <a href="./teacher-questions.html" class="info-link">База питань</a>
         <a href="./teacher.html" class="info-link">← Кабінет вчителя</a>
       </div>
@@ -255,6 +266,12 @@
 
               <div id="panel-single" class="type-panel">
                 <div class="panel-title">Варіанти відповіді (А, Б, В, Г, Д)</div>
+                <div class="single-options-header" aria-hidden="true">
+                  <span>Літера</span>
+                  <span>Текст або число</span>
+                  <span>LaTeX формула</span>
+                  <span></span>
+                </div>
                 <div id="single-options"></div>
                 <button type="button" class="btn-add" id="single-add-opt">+ Додати варіант</button>
                 <div class="field" style="margin-top:14px;">

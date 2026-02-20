@@ -65,6 +65,7 @@ function initQuestionsFile() {
 const app = express();
 const PORT = 3000;
 const SESSION_COOKIE = "nmt_teacher";
+const IMPERSONATE_ORIGINAL_COOKIE = "nmt_impersonate_original";
 const STUDENT_ACCESS_COOKIE = "nmt_student_access";
 const SESSION_SECRET = process.env.SESSION_SECRET || "nmt-secret-change-in-production";
 const ADMIN_EMAIL = "vanya.haidov@gmail.com";
@@ -93,7 +94,6 @@ const STUDENT_ACCESS_MAX_AGE_MS = 2 * 60 * 60 * 1000; // 2 hours
 app.use(express.json({ limit: "2mb" }));
 app.use(cookieParser(SESSION_SECRET));
 app.use("/img", express.static(IMG_DIR));
-app.use(express.static(path.join(__dirname)));
 
 function getTeacherId(req) {
   const raw = req.signedCookies[SESSION_COOKIE];
@@ -114,6 +114,25 @@ function setTeacherCookie(res, teacherId) {
 
 function clearTeacherCookie(res) {
   res.clearCookie(SESSION_COOKIE);
+}
+
+function setImpersonateOriginal(res, teacherId) {
+  const payload = JSON.stringify({ teacherId });
+  const value = Buffer.from(payload, "utf8").toString("base64");
+  res.cookie(IMPERSONATE_ORIGINAL_COOKIE, value, { signed: true, httpOnly: true, maxAge: 8 * 60 * 60 * 1000 });
+}
+
+function getImpersonateOriginal(req) {
+  const raw = req.signedCookies[IMPERSONATE_ORIGINAL_COOKIE];
+  if (!raw) return null;
+  try {
+    const data = JSON.parse(Buffer.from(raw, "base64").toString("utf8"));
+    return data.teacherId != null ? data.teacherId : null;
+  } catch (e) { return null; }
+}
+
+function clearImpersonateOriginal(res) {
+  res.clearCookie(IMPERSONATE_ORIGINAL_COOKIE);
 }
 
 function generateOTPCode() {
@@ -183,6 +202,7 @@ app.get("/api/teachers/me", (req, res) => {
   if (!teacherId) return res.status(401).json({ error: "Не авторизовано" });
   const teacher = db.prepare("SELECT id, email, name, school, city, is_admin FROM teachers WHERE id = ?").get(teacherId);
   if (!teacher) return res.status(401).json({ error: "Не авторизовано" });
+  const isImpersonated = getImpersonateOriginal(req) != null;
   return res.json({
     teacher: {
       id: teacher.id,
@@ -191,6 +211,7 @@ app.get("/api/teachers/me", (req, res) => {
       school: teacher.school || "",
       city: teacher.city || "",
       isAdmin: !!teacher.is_admin,
+      isImpersonated: isImpersonated,
     },
   });
 });
@@ -444,6 +465,25 @@ app.post("/api/attempts", (req, res) => {
 });
 
 // ——— Admin (requireAdmin) ———
+app.post("/api/admin/impersonate", requireAdmin, (req, res) => {
+  const teacherId = parseInt(req.body && req.body.teacher_id, 10);
+  if (!teacherId) return res.status(400).json({ error: "Вкажіть teacher_id" });
+  const teacher = db.prepare("SELECT id FROM teachers WHERE id = ?").get(teacherId);
+  if (!teacher) return res.status(404).json({ error: "Вчителя не знайдено" });
+  const adminId = getTeacherId(req);
+  setImpersonateOriginal(res, adminId);
+  setTeacherCookie(res, teacherId);
+  return res.json({ ok: true });
+});
+
+app.post("/api/admin/stop-impersonate", (req, res) => {
+  const originalId = getImpersonateOriginal(req);
+  if (originalId == null) return res.status(403).json({ error: "Не в режимі входу як вчитель" });
+  clearImpersonateOriginal(res);
+  setTeacherCookie(res, originalId);
+  return res.json({ ok: true });
+});
+
 app.get("/api/admin/teachers", requireAdmin, (req, res) => {
   const rows = db.prepare("SELECT id, email, name, school, city, is_admin, created_at FROM teachers ORDER BY name, email").all();
   return res.json({ teachers: rows });
@@ -635,6 +675,7 @@ app.delete("/api/admin/students/:id", requireAdmin, (req, res) => {
 
 // ——— Питання (база завдань): читання та збереження (адмін)
 app.get("/api/questions", (req, res) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate");
   try {
     const data = readQuestions();
     return res.json(Array.isArray(data) ? data : data.questions || data.data || []);
@@ -886,12 +927,15 @@ app.post("/api/teacher/upload-image", requireTeacher, upload.single("image"), (r
   return res.json({ path: relativePath });
 });
 
-// SPA fallback: teacher / admin pages
-app.get("/teacher*", (req, res) => res.sendFile(path.join(__dirname, "teacher.html")));
-app.get("/teacher-editor*", (req, res) => res.sendFile(path.join(__dirname, "teacher-editor.html")));
-app.get("/admin*", (req, res) => res.sendFile(path.join(__dirname, "admin.html")));
-app.get("/class/:id*", (req, res) => res.sendFile(path.join(__dirname, "class.html")));
-app.get("/student/:id*", (req, res) => res.sendFile(path.join(__dirname, "student.html")));
+// SPA fallback: teacher / admin pages (exact paths so /api/admin/* is never matched)
+app.get("/teacher", (req, res) => res.sendFile(path.join(__dirname, "teacher.html")));
+app.get("/teacher-editor", (req, res) => res.sendFile(path.join(__dirname, "teacher-editor.html")));
+app.get("/admin", (req, res) => res.sendFile(path.join(__dirname, "admin.html")));
+app.get("/class/:id", (req, res) => res.sendFile(path.join(__dirname, "class.html")));
+app.get("/student/:id", (req, res) => res.sendFile(path.join(__dirname, "student.html")));
+
+// Static files (index.html, admin.html, teacher.html, etc.) — after API so /api/* is never served as files
+app.use(express.static(path.join(__dirname)));
 
 initQuestionsFile();
 

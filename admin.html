@@ -67,13 +67,22 @@
   <div class="app-container">
     <header class="app-header">
       <div class="header-left">
+        <a href="./index.html" class="header-logo" title="На початковий екран">НМТ</a>
         <div class="header-text">
           <h1>Панель адміністратора</h1>
           <p class="header-subtitle">Вчителі, класи, учні</p>
         </div>
       </div>
-      <div class="header-right">
+      <div class="header-right header-nav" id="admin-header-actions">
         <span id="admin-email" class="muted"></span>
+        <div id="admin-impersonate-wrap" class="hidden" style="display:inline-flex;align-items:center;">
+          <label class="muted" style="display:inline-flex;align-items:center;gap:6px;font-size:0.9rem;">
+            Увійти як вчитель:
+            <select id="admin-impersonate-select" class="text-input" style="width:auto;min-width:180px;padding:6px 10px;">
+              <option value="">— оберіть вчителя —</option>
+            </select>
+          </label>
+        </div>
         <a href="./teacher.html" class="info-link">Кабінет вчителя</a>
         <button type="button" id="btn-logout" class="btn btn-secondary">Вийти</button>
       </div>
@@ -179,29 +188,66 @@
       let currentTab = "teachers";
       let modalMode = null;
       let modalId = null;
+      var apiBase = (function () {
+        var path = window.location.pathname;
+        var i = path.lastIndexOf("/");
+        return i >= 0 ? path.slice(0, i) : "";
+      })();
 
       function api(path, opts) {
-        return fetch(path, { credentials: "include", ...opts }).then(function (r) {
+        var url = (path.charAt(0) === "/" ? apiBase + path : path);
+        return fetch(url, { credentials: "include", ...opts }).then(function (r) {
           if (r.status === 401) { showLogin(); return Promise.reject(new Error("Не авторизовано")); }
           if (r.status === 403) { showLogin(); return Promise.reject(new Error("Доступ заборонено")); }
-          return r.json().then(function (data) { if (!r.ok) throw new Error(data.error || "Помилка"); return data; });
+          return r.text().then(function (text) {
+            var data;
+            try { data = text ? JSON.parse(text) : {}; } catch (e) {
+              if (typeof text === "string" && text.trim().indexOf("<") === 0)
+                return Promise.reject(new Error("Сервер повернув сторінку замість даних. Перевірте, що ви увійшли як адмін і що запит йде на правильну адресу API."));
+              return Promise.reject(new Error("Невірна відповідь сервера"));
+            }
+            if (!r.ok) throw new Error(data.error || "Помилка");
+            return data;
+          });
         });
       }
 
       function showLogin() {
         loginScreen.classList.remove("hidden");
         dashboard.classList.add("hidden");
+        var wrap = document.getElementById("admin-impersonate-wrap");
+        if (wrap) wrap.classList.add("hidden");
       }
       function showDashboard() {
+        try {
+          var saved = sessionStorage.getItem("nmt-admin-tab");
+          if (saved && ["teachers", "classes", "students", "submissions"].indexOf(saved) !== -1) currentTab = saved;
+        } catch (e) {}
         loginScreen.classList.add("hidden");
         dashboard.classList.remove("hidden");
+        document.querySelectorAll(".admin-tab").forEach(function (t) { t.classList.toggle("active", t.dataset.tab === currentTab); });
+        document.querySelectorAll(".admin-panel").forEach(function (p) { p.classList.toggle("active", p.id === "panel-" + currentTab); });
+        var titles = { teachers: "Вчителі", classes: "Класи", students: "Учні", submissions: "Завдання на перевірку" };
+        document.getElementById("dashboard-title").textContent = titles[currentTab] || currentTab;
         loadTab(currentTab);
         updateSubmissionsBadge();
+        var wrap = document.getElementById("admin-impersonate-wrap");
+        if (wrap) wrap.classList.remove("hidden");
+        loadImpersonateTeachers();
+      }
+      function loadImpersonateTeachers() {
+        var sel = document.getElementById("admin-impersonate-select");
+        if (!sel) return;
+        api("/api/admin/teachers").then(function (data) {
+          sel.innerHTML = "<option value=\"\">— оберіть вчителя —</option>" + (data.teachers || []).map(function (t) {
+            return "<option value=\"" + t.id + "\">" + escHtml(t.name) + " (" + escHtml(t.email) + ")</option>";
+          }).join("");
+        }).catch(function () {});
       }
       function updateSubmissionsBadge() {
         var tabEl = document.getElementById("tab-submissions");
         if (!tabEl) return;
-        fetch("/api/admin/submissions", { credentials: "include" })
+        fetch(apiBase + "/api/admin/submissions", { credentials: "include" })
           .then(function (r) {
             if (!r.ok) return [];
             return r.json().then(function (d) { return d.submissions || []; }, function () { return []; });
@@ -231,12 +277,22 @@
       });
 
       document.getElementById("btn-logout").addEventListener("click", function () {
-        fetch("/api/teachers/logout", { method: "POST", credentials: "include" }).then(function () { showLogin(); });
+        fetch(apiBase + "/api/teachers/logout", { method: "POST", credentials: "include" }).then(function () { showLogin(); });
+      });
+      document.getElementById("admin-impersonate-select").addEventListener("change", function () {
+        var val = this.value;
+        if (!val) return;
+        var teacherId = parseInt(val, 10);
+        if (!teacherId) return;
+        api("/api/admin/impersonate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ teacher_id: teacherId }) })
+          .then(function () { window.location.href = "teacher.html"; })
+          .catch(function (e) { alert(e.message || "Помилка"); this.selectedIndex = 0; }.bind(this));
       });
 
       document.querySelectorAll(".admin-tab").forEach(function (tab) {
         tab.addEventListener("click", function () {
           currentTab = tab.dataset.tab;
+          try { sessionStorage.setItem("nmt-admin-tab", currentTab); } catch (e) {}
           document.querySelectorAll(".admin-tab").forEach(function (t) { t.classList.remove("active"); });
           document.querySelectorAll(".admin-panel").forEach(function (p) { p.classList.remove("active"); });
           tab.classList.add("active");
@@ -626,7 +682,7 @@
         submissionModalId = id;
         Promise.all([
           api("/api/admin/submissions/" + id),
-          fetch("/api/questions", { credentials: "include" }).then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; })
+          fetch(apiBase + "/api/questions", { credentials: "include" }).then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; })
         ]).then(function (results) {
           var data = results[0];
           var mainBank = Array.isArray(results[1]) ? results[1] : [];
