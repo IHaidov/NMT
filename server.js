@@ -442,9 +442,60 @@ app.get("/api/classes/:id/results", (req, res) => {
   return res.json({ class: c, attempts });
 });
 
-// ——— Save attempt (student finished test) ———
+// ——— Start attempt (записати проходження одразу після початку тесту) ———
+app.post("/api/attempts/start", (req, res) => {
+  const { email, name } = req.body || {};
+  if (!email || !String(email).trim()) return res.status(400).json({ error: "Потрібна пошта учня" });
+  const emailStr = String(email).trim();
+  const nameStr = name ? String(name).trim() : "";
+  let student = db.prepare("SELECT id FROM students WHERE email = ?").get(emailStr);
+  if (!student) {
+    db.prepare("INSERT INTO students (email, name) VALUES (?, ?)").run(emailStr, nameStr);
+    student = { id: db.prepare("SELECT last_insert_rowid() as id").get().id };
+  } else {
+    if (nameStr) db.prepare("UPDATE students SET name = ? WHERE id = ?").run(nameStr, student.id);
+  }
+  db.prepare(
+    "INSERT INTO test_attempts (student_id, student_email, student_name, score, percent, answers_json, incorrect_json) VALUES (?, ?, ?, 0, 0, '[]', '[]')"
+  ).run(student.id, emailStr, nameStr);
+  const attemptId = db.prepare("SELECT last_insert_rowid() as id").get().id;
+  return res.json({ ok: true, attemptId });
+});
+
+// ——— Update attempt (прогрес або фінальний результат) ———
+app.patch("/api/attempts/:id", (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!id) return res.status(400).json({ error: "Невірний id проходження" });
+  const row = db.prepare("SELECT id FROM test_attempts WHERE id = ?").get(id);
+  if (!row) return res.status(404).json({ error: "Проходження не знайдено" });
+  const { score, percent, answers, incorrect } = req.body || {};
+  const updates = [];
+  const values = [];
+  if (score != null) {
+    updates.push("score = ?");
+    values.push(parseInt(score, 10));
+  }
+  if (percent != null) {
+    updates.push("percent = ?");
+    values.push(parseInt(percent, 10));
+  }
+  if (answers !== undefined) {
+    updates.push("answers_json = ?");
+    values.push(typeof answers === "string" ? answers : JSON.stringify(answers || []));
+  }
+  if (incorrect !== undefined) {
+    updates.push("incorrect_json = ?");
+    values.push(typeof incorrect === "string" ? incorrect : JSON.stringify(incorrect || []));
+  }
+  if (updates.length === 0) return res.json({ ok: true });
+  values.push(id);
+  db.prepare("UPDATE test_attempts SET " + updates.join(", ") + " WHERE id = ?").run(...values);
+  return res.json({ ok: true });
+});
+
+// ——— Save attempt (student finished test; створює новий запис, якщо attemptId не передано) ———
 app.post("/api/attempts", (req, res) => {
-  const { email, name, score, percent, answers, incorrect } = req.body || {};
+  const { email, name, attemptId, score, percent, answers, incorrect } = req.body || {};
   if (!email || !String(email).trim()) return res.status(400).json({ error: "Потрібна пошта учня" });
   const emailStr = String(email).trim();
   const nameStr = name ? String(name).trim() : "";
@@ -458,6 +509,18 @@ app.post("/api/attempts", (req, res) => {
   }
   const answersJson = JSON.stringify(answers || []);
   const incorrectJson = JSON.stringify(incorrect || []);
+
+  if (attemptId) {
+    const aid = parseInt(attemptId, 10);
+    const existing = db.prepare("SELECT id, student_id FROM test_attempts WHERE id = ?").get(aid);
+    if (existing && existing.student_id === student.id) {
+      db.prepare(
+        "UPDATE test_attempts SET score = ?, percent = ?, answers_json = ?, incorrect_json = ? WHERE id = ?"
+      ).run(parseInt(score, 10), parseInt(percent, 10), answersJson, incorrectJson, aid);
+      return res.json({ ok: true, attemptId: aid });
+    }
+  }
+
   db.prepare(
     "INSERT INTO test_attempts (student_id, student_email, student_name, score, percent, answers_json, incorrect_json) VALUES (?, ?, ?, ?, ?, ?, ?)"
   ).run(student.id, emailStr, nameStr, parseInt(score, 10), parseInt(percent, 10), answersJson, incorrectJson);

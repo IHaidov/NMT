@@ -14,6 +14,7 @@ let currentIndex = 0;
 let isFinished = false;
 let timerInterval = null;
 let endTime = null;
+let currentAttemptId = null;
 
 // Елементи DOM
 const startScreen = document.getElementById("start-screen");
@@ -74,6 +75,7 @@ function saveTestState() {
       currentIndex,
       endTime,
       isFinished,
+      currentAttemptId,
     };
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (e) {
@@ -609,6 +611,25 @@ function renderQuestion(index) {
   if (!isFinished) saveTestState();
 }
 
+function saveProgressToServer() {
+  if (isFinished || !currentAttemptId || !testQuestions.length) return;
+  try {
+    const result = evaluateTest();
+    const fullAnswers = buildFullAnswers(result);
+    fetch("/api/attempts/" + currentAttemptId, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        answers: fullAnswers,
+        incorrect: result.incorrect,
+        score: result.score,
+        percent: result.percent,
+      }),
+    }).catch(() => {});
+  } catch (e) {}
+}
+
 function goToQuestion(index) {
   currentIndex = index;
   renderQuestion(currentIndex);
@@ -835,10 +856,12 @@ function saveResultAndRedirect(result, studentEmail) {
   }
   fetch("/api/attempts", {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       email: studentEmail || "",
       name: studentName,
+      attemptId: currentAttemptId || undefined,
       score: result.score,
       percent: result.percent,
       answers: fullAnswers,
@@ -953,6 +976,21 @@ startBtn.addEventListener("click", async () => {
   studentNameDisplay.textContent = name;
   if (emailInput) emailInput.disabled = true;
 
+  try {
+    const startRes = await fetch("/api/attempts/start", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, name }),
+    });
+    if (startRes.ok) {
+      const data = await startRes.json();
+      if (data && data.attemptId) currentAttemptId = data.attemptId;
+    }
+  } catch (e) {
+    console.warn("Не вдалося створити запис проходження", e);
+  }
+
   startScreen.classList.add("hidden");
   testScreen.classList.remove("hidden");
   document.body.classList.add("test-active");
@@ -960,6 +998,7 @@ startBtn.addEventListener("click", async () => {
   startTimer();
   currentIndex = 0;
   renderQuestion(currentIndex);
+  saveTestState();
 });
 
 prevBtn.addEventListener("click", () => {
@@ -978,6 +1017,10 @@ flagBtn.addEventListener("click", toggleFlag);
 if (finishBtn) finishBtn.addEventListener("click", () => finishTest(false));
 document.addEventListener("click", (e) => {
   if (e.target && e.target.id === "finish-btn") finishTest(false);
+});
+
+window.addEventListener("beforeunload", () => {
+  saveProgressToServer();
 });
 
 // Усі бачать стартовий екран; тест можна почати лише після підтвердження коду класу
@@ -1041,6 +1084,7 @@ function tryRestoreTest() {
   currentIndex = state.currentIndex;
   endTime = state.endTime;
   isFinished = state.isFinished;
+  currentAttemptId = state.currentAttemptId || null;
 
   studentNameDisplay.textContent = state.studentName || "";
   startScreen.classList.add("hidden");

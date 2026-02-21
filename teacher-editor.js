@@ -303,7 +303,7 @@
       panelSingle.classList.add("active");
       singleOptions.innerHTML = "";
       (q.options || []).forEach(function (opt) {
-        addSingleOptionRow(opt.label || "", opt.text || "", opt.latex || "");
+        addSingleOptionRow(opt.label || "", opt.text || "", (opt.latex || opt.text || "").trim());
       });
       var ans = (q.answer && q.answer[0]) ? q.answer[0].label : "";
       fSingleCorrect.value = ans;
@@ -368,12 +368,13 @@
   function addSingleOptionRow(label, text, latex) {
     var row = document.createElement("div");
     row.className = "option-row";
-    row.innerHTML = "<span class=\"opt-label\"><input type=\"text\" placeholder=\"А\" maxlength=\"1\" value=\"" + escapeHtml(label) + "\" class=\"opt-label-in\" /></span>" +
-      "<input type=\"text\" placeholder=\"Текст\" class=\"opt-text-in\" value=\"" + escapeHtml(text) + "\" />" +
-      "<input type=\"text\" placeholder=\"LaTeX\" class=\"opt-latex-in\" value=\"" + escapeHtml(latex) + "\" />" +
+    row.innerHTML = "<div class=\"opt-cell-label\">" +
+      "<span class=\"opt-label\"><input type=\"text\" placeholder=\"А\" maxlength=\"1\" value=\"" + escapeHtml(label) + "\" class=\"opt-label-in\" /></span>" +
+      "<input type=\"text\" class=\"opt-text-in\" value=\"" + escapeHtml(text) + "\" aria-hidden=\"true\" tabindex=\"-1\" />" +
+      "</div>" +
+      "<input type=\"text\" placeholder=\"Відповідь\" class=\"opt-latex-in\" value=\"" + escapeHtml(latex) + "\" />" +
       "<button type=\"button\" class=\"btn-remove\">×</button>";
     row.querySelector(".btn-remove").addEventListener("click", function () { row.remove(); });
-    trackFocus(row.querySelector(".opt-text-in"));
     trackFocus(row.querySelector(".opt-latex-in"));
     singleOptions.appendChild(row);
   }
@@ -426,9 +427,8 @@
       var opts = [];
       singleOptions.querySelectorAll(".option-row").forEach(function (row) {
         var lbl = (row.querySelector(".opt-label-in").value || "").trim();
-        var txt = (row.querySelector(".opt-text-in").value || "").trim();
         var ltx = (row.querySelector(".opt-latex-in").value || "").trim();
-        if (lbl) opts.push({ label: lbl, text: txt, latex: ltx || undefined });
+        if (lbl) opts.push({ label: lbl, text: ltx, latex: ltx || undefined });
       });
       var correct = (fSingleCorrect.value || "").trim();
       var correctOpt = opts.find(function (o) { return o.label === correct; });

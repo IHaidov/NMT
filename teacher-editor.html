@@ -60,15 +60,16 @@
     .editor-form #f-type { width: 100%; max-width: 340px; padding: 10px 36px 10px 14px; border-radius: 10px; border: 1px solid #c7d2fe; background: #f8fafc url('data:image/svg+xml,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"%23475569\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polyline points=\"6 9 12 15 18 9\"/></svg>') no-repeat right 10px center; background-size: 18px; font-size: 0.95rem; color: #1e293b; cursor: pointer; appearance: none; -webkit-appearance: none; }
     .editor-form #f-type:hover { border-color: #2563eb; background-color: #fff; }
     .editor-form #f-type:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2); }
-    .single-options-header { display: grid; grid-template-columns: 48px 0 1fr 44px; gap: 10px; align-items: center; margin-bottom: 8px; padding: 0 4px; font-size: 0.8rem; font-weight: 600; color: #64748b; }
-    .single-options-header span:nth-child(2) { display: none; }
+    .single-options-header { display: grid; grid-template-columns: 48px minmax(220px, 1fr) 44px; gap: 10px; align-items: center; margin-bottom: 8px; padding: 0 4px; font-size: 0.8rem; font-weight: 600; color: #64748b; }
     .option-row, .pair-row, .kv-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
-    .option-row { display: grid; grid-template-columns: 48px 0 1fr 44px; gap: 10px; align-items: center; }
+    .option-row { display: grid; grid-template-columns: 48px minmax(220px, 1fr) 44px; gap: 10px; align-items: center; }
     .option-row input, .pair-row input, .kv-row input { flex: 1; min-width: 100px; }
+    .option-row .opt-cell-label { display: flex; align-items: center; min-width: 0; }
     .option-row .opt-label { width: 48px; min-width: 48px; max-width: 48px; overflow: hidden; }
     .option-row .opt-label-in { width: 100%; max-width: 48px; min-width: 0; box-sizing: border-box; text-align: center; font-weight: 600; color: #475569; }
-    .option-row .opt-text-in { display: none; }
-    .option-row .opt-latex-in { min-width: 0; }
+    .option-row .opt-text-in { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+    .option-row .opt-latex-in { width: 100%; min-width: 0; box-sizing: border-box; padding: 10px 12px; border: 1px solid #d0d5dc; border-radius: 8px; font-size: 0.95rem; background: #fff; color: #1a1f2e; }
+    .option-row .opt-latex-in::placeholder { color: #94a3b8; }
     .option-row .btn-remove { justify-self: end; }
     .btn-remove { padding: 6px 10px; background: #fee2e2; border: 1px solid #fecaca; border-radius: 6px; cursor: pointer; color: #b91c1c; }
     .btn-add { padding: 8px 14px; background: #dbeafe; border: 1px solid #93c5fd; border-radius: 8px; cursor: pointer; font-size: 0.9rem; margin-top: 8px; }
@@ -268,8 +269,7 @@
                 <div class="panel-title">Варіанти відповіді (А, Б, В, Г, Д)</div>
                 <div class="single-options-header" aria-hidden="true">
                   <span>Літера</span>
-                  <span>Текст або число</span>
-                  <span>LaTeX формула</span>
+                  <span>Відповідь</span>
                   <span></span>
                 </div>
                 <div id="single-options"></div>
